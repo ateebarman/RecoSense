@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: recommender-backend
+    env: node
+    branch: main
+    buildCommand: cd backend && npm ci
+    startCommand: cd backend && npm start
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: SERVE_FRONTEND
+        sync: false
+
+  - type: static
+    name: recommender-frontend
+    branch: main
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false

@@ -1,5 +1,8 @@
 import axios from "axios";
-const api = axios.create({ baseURL: "/api" });
+// Allow overriding API base URL at build time using Vite env var `VITE_API_URL`.
+// If not provided, frontend will call relative `/api` (useful when proxied or when backend is same origin).
+const BASE_URL = (import.meta && import.meta.env && import.meta.env.VITE_API_URL) ? import.meta.env.VITE_API_URL : "/api";
+const api = axios.create({ baseURL: BASE_URL });
 export const getProducts = (opts = {}) => api.get("/products", { params: opts });
 export const getProductByAsin = (asin) => api.get(`/products/${asin}`);
 export const getUser = (reviewerID) => api.get(`/user/${reviewerID}`);

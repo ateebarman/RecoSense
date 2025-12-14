@@ -1,0 +1,51 @@
+name: CI & Render Deploy
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install backend deps
+        working-directory: ./backend
+        run: |
+          npm ci
+
+      - name: Trigger Render deploy (backend)
+        if: ${{ secrets.RENDER_API_KEY && secrets.RENDER_BACKEND_SERVICE_ID }}
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_BACKEND_SERVICE_ID }}
+        run: |
+          echo "Triggering backend deploy for service $SERVICE_ID"
+          curl -s -X POST "https://api.render.com/v1/services/$SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":true}'
+
+      - name: Trigger Render deploy (frontend)
+        if: ${{ secrets.RENDER_API_KEY && secrets.RENDER_FRONTEND_SERVICE_ID }}
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_FRONTEND_SERVICE_ID }}
+        run: |
+          echo "Triggering frontend deploy for service $SERVICE_ID"
+          curl -s -X POST "https://api.render.com/v1/services/$SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":true}'
