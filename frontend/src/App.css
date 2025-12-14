@@ -1,0 +1,247 @@
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+/* Append these to frontend/src/index.css */
+
+.product-card-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.error-message {
+    color: #e53935;
+}
+
+/* Product Detail Page */
+.product-detail-container {
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
+}
+.product-info {
+    display: flex;
+    gap: 2rem;
+    background-color: #2f2f2f;
+    padding: 2rem;
+    border-radius: 8px;
+}
+.product-detail-image {
+    max-width: 300px;
+    height: auto;
+    object-fit: contain;
+    background-color: white;
+    border-radius: 4px;
+}
+.product-detail-text h1 {
+    margin-top: 0;
+}
+.price-detail {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #a6e22e;
+    margin: 1rem 0;
+}
+
+/* Reviews Section */
+.reviews-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.reviews-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.review-item {
+    background-color: #2f2f2f;
+    padding: 1.5rem;
+    border-radius: 8px;
+    border-left: 4px solid #646cff;
+}
+.review-item h4 {
+    margin-top: 0;
+}
+.review-item small {
+    color: #aaa;
+    margin-top: 1rem;
+    display: block;
+}
+
+/* Add Review Form */
+.add-review-form {
+    background-color: #2f2f2f;
+    padding: 2rem;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.add-review-form input,
+.add-review-form select,
+.add-review-form textarea {
+    width: 100%;
+    padding: 0.8rem;
+    border-radius: 4px;
+    border: 1px solid #555;
+    background-color: #242424;
+    color: white;
+    box-sizing: border-box;
+}
+.add-review-form button {
+    padding: 0.8rem;
+    cursor: pointer;
+    background-color: #646cff;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    font-weight: bold;
+    align-self: flex-start;
+}
+
+/* Product Card with Add to Cart */
+.product-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    justify-content: center;
+}
+
+.add-to-cart-btn {
+    flex: 1;
+    padding: 0.5rem;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: background-color 0.3s;
+}
+
+.add-to-cart-btn:hover:not(:disabled) {
+    background-color: #218838;
+}
+
+.add-to-cart-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Product Detail Add to Cart */
+.product-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    align-items: center;
+}
+
+.quantity-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.quantity-selector label {
+    color: white;
+    font-weight: 500;
+}
+
+.quantity-selector input {
+    width: 60px;
+    padding: 0.5rem;
+    border: 1px solid #555;
+    background-color: #242424;
+    color: white;
+    border-radius: 4px;
+}
+
+.add-to-cart-btn-detail {
+    flex: 1;
+    padding: 0.8rem 1.5rem;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: background-color 0.3s;
+}
+
+.add-to-cart-btn-detail:hover:not(:disabled) {
+    background-color: #218838;
+}
+
+.add-to-cart-btn-detail:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Navbar Cart Badge */
+.cart-link {
+    position: relative;
+}
+
+.cart-badge {
+    position: absolute;
+    top: -8px;
+    right: -12px;
+    background-color: #e53935;
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: bold;
+}

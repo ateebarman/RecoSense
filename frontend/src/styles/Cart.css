@@ -1,0 +1,252 @@
+.cart-container {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 24px;
+  min-height: 100vh;
+  background-color: #f4f4f4;
+  color: #111;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+}
+
+.cart-container h1 {
+  color: #111;
+  margin-bottom: 8px;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.cart-count {
+  color: #666;
+  margin-bottom: 18px;
+  font-size: 14px;
+}
+
+.empty-cart {
+  text-align: center;
+  padding: 48px 20px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+}
+
+.empty-cart p {
+  font-size: 16px;
+  color: #555;
+  margin-bottom: 14px;
+}
+
+.continue-shopping-btn {
+  display: inline-block;
+  padding: 10px 4px;
+  background-color: #222;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 6px;
+  font-weight: 600;
+  transition: opacity 0.15s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.continue-shopping-btn:hover {
+  opacity: 0.9;
+}
+
+.cart-content {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 22px;
+  margin-top: 20px;
+}
+
+.cart-items {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 18px;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+}
+
+.cart-item {
+  display: grid;
+  grid-template-columns: 100px 1fr 120px 120px;
+  gap: 18px;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.cart-item:last-child {
+  border-bottom: none;
+}
+
+.item-image img {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #f8f8f8;
+}
+
+.item-details {
+  flex: 1;
+}
+
+.item-title {
+  display: block;
+  color: #111;
+  text-decoration: none;
+  font-weight: 700;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 420px;
+}
+
+.item-brand {
+  color: #888;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.item-price {
+  color: #111;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.item-quantity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
+.item-quantity label {
+  font-size: 12px;
+  color: #666;
+  white-space: nowrap;
+}
+
+.item-quantity input {
+  width: 70px;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.item-total {
+  text-align: right;
+  min-width: 80px;
+}
+
+.item-total p {
+  font-weight: 700;
+  font-size: 15px;
+  color: #111;
+}
+
+.remove-btn {
+  padding: 8px 14px;
+  background-color: #333;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: opacity 0.12s ease;
+}
+
+.remove-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.remove-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cart-summary {
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+  padding: 18px;
+  height: fit-content;
+  position: sticky;
+  top: 20px;
+}
+
+.cart-summary h2 {
+  margin-bottom: 16px;
+  color: #111;
+  font-size: 18px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  color: #666;
+  font-size: 14px;
+  border-bottom: 1px solid #eee;
+}
+
+.summary-row.total {
+  border-bottom: none;
+  border-top: 1px solid #ddd;
+  padding-top: 14px;
+  padding-bottom: 14px;
+  font-weight: 700;
+  color: #111;
+  font-size: 16px;
+}
+
+.checkout-btn {
+  width: 100%;
+  padding: 12px;
+  background-color: #111;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  margin-top: 14px;
+}
+
+.checkout-btn:hover:not(:disabled) {
+  opacity: 0.95;
+}
+
+.checkout-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cart-summary .continue-shopping-btn {
+  width: 100%;
+  text-align: center;
+  margin-top: 10px;
+}
+
+@media (max-width: 768px) {
+  .cart-content {
+    grid-template-columns: 1fr;
+  }
+
+  .cart-item {
+    grid-template-columns: 80px 1fr;
+    gap: 12px;
+  }
+
+  .item-quantity,
+  .item-total,
+  .remove-btn {
+    grid-column: 2;
+  }
+
+  .cart-summary {
+    position: static;
+  }
+}
