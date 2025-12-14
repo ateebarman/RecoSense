@@ -60,6 +60,42 @@ cd backend && npm start
 
 Also set `SERVE_FRONTEND=true` and `MONGO_URI` as environment variables on the backend service.
 
+### Render: Single-service step-by-step
+
+1. In the Render dashboard create a **Web Service** and point it at your repository (branch `main`).
+2. **Root Directory:** leave empty (use repo root).
+3. **Build Command:** use one of the following (pick the one that matches your package manager):
+
+	NPM:
+	```bash
+	cd frontend && npm ci && npm run build && cd ../backend && npm ci
+	```
+
+	Yarn:
+	```bash
+	cd frontend && yarn && yarn build && cd ../backend && yarn
+	```
+
+	These commands build `frontend/dist` first and then install backend dependencies.
+4. **Start Command:**
+
+	```bash
+	cd backend && npm start
+	```
+
+5. **Environment**: Node
+6. **Environment variables** (set in Render's UI):
+	- `MONGO_URI` = your MongoDB connection string
+	- `SERVE_FRONTEND` = `true`
+
+7. (Optional) Do not set `VITE_API_URL`; leaving it unset causes the frontend to call relative `/api`, which is correct when the backend serves the frontend from the same origin.
+
+Notes:
+- Render runs the `Build Command` during deploy. When the build finishes, the service will use the `Start Command` to run the server.
+- If you change frontend code, Render will rebuild and redeploy the backend service (because the build step includes the frontend build).
+- If you need to debug build issues, check the Render deploy logs — they contain build and install output.
+
+
 ### Optional: Continuous deployment via GitHub Actions
 
 You can add CI that builds and triggers a Render deploy automatically when you push to `main`. I added `.github/workflows/ci-render-deploy.yml` which:
