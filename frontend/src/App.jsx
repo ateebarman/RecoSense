@@ -1,19 +1,22 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import { useUser } from "./context/UserContext";
+import { useUser, useIsAdmin } from "./context/UserContext";
 import Navbar from "./components/Navbar";
 import Login from "./pages/Login";
+import Register from "./pages/Register";
 import Home from "./pages/Home";
 import LikedProducts from "./pages/LikedProducts";
 import MyReviews from "./pages/MyReviews";
 import ProductDetail from "./pages/ProductDetail";
 import Recommendations from "./pages/Recommendations";
+import AdminPanel from "./pages/AdminPanel";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import Orders from "./pages/Orders";
 
 function App() {
   const { user_id } = useUser();
+  const isAdmin = useIsAdmin();
   return (
     <>
       {user_id && <Navbar />}
@@ -22,6 +25,10 @@ function App() {
           <Route
             path="/login"
             element={!user_id ? <Login /> : <Navigate to="/" />}
+          />
+          <Route
+            path="/register"
+            element={!user_id ? <Register /> : <Navigate to="/" />}
           />
           <Route
             path="/"
@@ -38,6 +45,10 @@ function App() {
           <Route
             path="/recommendations"
             element={user_id ? <Recommendations /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/admin"
+            element={user_id && isAdmin ? <AdminPanel /> : <Navigate to={user_id ? "/" : "/login"} />}
           />
           <Route
             path="/product/:asin"

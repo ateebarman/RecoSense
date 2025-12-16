@@ -10,7 +10,7 @@ const Login = () => {
         if (!id) { setError('User ID cannot be empty.'); return; }
         try {
             const response = await getUser(id.trim());
-            if (response.data) { login(response.data.user_id, response.data.reviewerName); navigate('/'); }
+            if (response.data) { login(response.data.user_id, response.data.reviewerName, response.data.isAdmin); navigate('/'); }
         } catch (err) { setError('Invalid User ID. Please try again.'); }
     };
     return (
@@ -20,6 +20,7 @@ const Login = () => {
                 <input type="text" placeholder="Enter your USER ID" value={id} onChange={(e) => setId(e.target.value)} />
                 <button type="submit">Login</button>
                 {error && <p className="error-message" style={{ color: 'red' }}>{error}</p>}
+                <p style={{ marginTop: '10px' }}>New here? <a href="/register">Register</a></p>
             </form>
         </div>
     );

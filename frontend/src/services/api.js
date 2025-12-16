@@ -6,14 +6,22 @@ const api = axios.create({ baseURL: BASE_URL });
 export const getProducts = (opts = {}) => api.get("/products", { params: opts });
 export const getProductByAsin = (asin) => api.get(`/products/${asin}`);
 export const getUser = (reviewerID) => api.get(`/user/${reviewerID}`);
+export const registerUser = (data) => api.post('/user/register', data);
 export const toggleLike = (reviewerID, asin) =>
   api.put(`/user/${reviewerID}/like`, { asin });
 export const getUserReviews = (reviewerID) => api.get(`/reviews/${reviewerID}`);
 export const getReviewsForProduct = (asin) =>
   api.get(`/reviews/product/${asin}`);
 export const addReview = (reviewData) => api.post("/reviews", reviewData);
-export const getRecommendations = (top_n = 10) =>
-  api.get(`/recommendations?top_n=${top_n}`);
+export const getRecommendations = (top_n = 10, user_id = null) =>
+  api.get(`/recommendations?top_n=${top_n}${user_id ? `&user_id=${encodeURIComponent(user_id)}` : ''}`);
+
+export const retrain = (user_id) => api.post('/recommendations/retrain', {}, { headers: { 'x-user-id': user_id } });
+export const retrainStatus = () => api.get('/recommendations/retrain/status');
+export const retrainClean = (user_id) => api.post('/recommendations/retrain/clean', {}, { headers: { 'x-user-id': user_id } });
+export const runModel = (user_id) => api.post('/recommendations/model/run', {}, { headers: { 'x-user-id': user_id } });
+export const getModelCounters = (user_id) => api.get('/recommendations/model/counters', { headers: { 'x-user-id': user_id } });
+export const resetModelCounters = (user_id) => api.post('/recommendations/model/counters/reset', {}, { headers: { 'x-user-id': user_id } });
 
 // Cart APIs
 export const fetchCart = (user_id) =>

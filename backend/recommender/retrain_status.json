@@ -1,0 +1,10 @@
+{
+  "status": "success",
+  "pid": null,
+  "started_at": "2025-12-16T08:43:31.960Z",
+  "finished_at": "2025-12-16T08:43:32.060Z",
+  "msg": "ok",
+  "outLog": "C:\\Users\\ateeb\\OneDrive\\Documents\\interViewPrep\\BTP Project\\RecommenderSystem_Website\\backend\\recommender\\logs\\modelrun-2025-12-16T08-43-31-959Z.out.log",
+  "errLog": "C:\\Users\\ateeb\\OneDrive\\Documents\\interViewPrep\\BTP Project\\RecommenderSystem_Website\\backend\\recommender\\logs\\modelrun-2025-12-16T08-43-31-959Z.err.log",
+  "mode": "infer"
+}

@@ -32,18 +32,29 @@ const seedDatabase = async () => {
         
         console.log('Creating unique users...');
         const userMap = new Map();
+        const ageGroups = ['18-24','25-34','35-44','45-54','55+'];
+        const genders = ['male','female','other'];
+        const locations = ['US','UK','India','Canada','Australia'];
+
         reviewsData.forEach(review => {
             if (!userMap.has(review.user_id)) {
+                // randomly assign demographic/location tags to seeded users so cold-start logic can operate
+                const age_group = ageGroups[Math.floor(Math.random() * ageGroups.length)];
+                const gender = genders[Math.floor(Math.random() * genders.length)];
+                const location = locations[Math.floor(Math.random() * locations.length)];
                 userMap.set(review.user_id, {
                     user_id: review.user_id,
                     reviewerName: review.reviewerName || 'N/A',
-                    likedProducts: []
+                    likedProducts: [],
+                    age_group,
+                    gender,
+                    location
                 });
             }
         });
         const usersToSeed = Array.from(userMap.values());
         await User.insertMany(usersToSeed);
-        console.log(`${usersToSeed.length} unique users seeded.`);
+        console.log(`${usersToSeed.length} unique users seeded (with demo demographics).`);
 
         console.log('Database seeding completed successfully!');
     } catch (error) {

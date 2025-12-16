@@ -1,10 +1,11 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { useUser } from "../context/UserContext";
+import { useUser, useIsAdmin } from "../context/UserContext";
 import { useCart } from "../context/CartContext";
 
 const Navbar = () => {
   const { userName, logout } = useUser();
+  const isAdmin = useIsAdmin();
   const { getCartCount } = useCart();
   const navigate = useNavigate();
   const cartCount = getCartCount();
@@ -21,6 +22,7 @@ const Navbar = () => {
         <NavLink to="/liked">Liked Products</NavLink>
         <NavLink to="/reviews">My Reviews</NavLink>
         <NavLink to="/recommendations">Recommendations</NavLink>
+        {isAdmin && <NavLink to="/admin">Admin</NavLink>}
         <NavLink to="/orders">📦 Orders</NavLink>
         <NavLink to="/cart" className="cart-link">
           🛒 Cart

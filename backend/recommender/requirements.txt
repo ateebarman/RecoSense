@@ -1,0 +1,6 @@
+lightfm
+pandas
+scipy
+pymongo
+python-dotenv
+numpy

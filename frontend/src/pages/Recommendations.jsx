@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { getRecommendations } from "../services/api";
+import { useUser } from "../context/UserContext";
 import { Link } from "react-router-dom";
 
 const Recommendations = () => {
@@ -11,7 +12,7 @@ const Recommendations = () => {
     try {
       setLoading(true);
       setError("");
-      const res = await getRecommendations(30);
+      const res = await getRecommendations(30, user_id);
       setData(res.data);
     } catch (e) {
       setError("Failed to load recommendations");
@@ -19,6 +20,8 @@ const Recommendations = () => {
       setLoading(false);
     }
   };
+
+  const { user_id } = useUser();
 
   useEffect(() => {
     fetchRecs();
@@ -40,7 +43,8 @@ const Recommendations = () => {
       {error && <p style={{ color: "red" }}>{error}</p>}
       {!loading && !error && (
         <>
-          {/* {data.userId && <p>Demo user: {data.userId}</p>} */}
+          {data.model_used && <p style={{ color: 'green' }}>Model: {data.model_used}</p>}
+          {data.message && <p style={{ color: 'gray' }}>{data.message}</p>}
           <div className="product-grid">
             {data.recommendations.map((rec) => (
               <div key={rec.asin} className="product-card">

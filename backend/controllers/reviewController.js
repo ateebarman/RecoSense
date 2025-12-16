@@ -24,6 +24,8 @@ exports.addReview = async (req, res) => {
             unixReviewTime: Math.floor(Date.now() / 1000)
         });
         const savedReview = await newReview.save();
+        // increment model-run counters so that after threshold the inference run will update recs
+        try { require('../recommender/retrainManager').incrementCounter('review', 1); } catch (e) { console.error('Counter increment error:', e); }
         res.status(201).json(savedReview);
     } catch (error) { res.status(500).json({ message: 'Server Error' }); }
 };

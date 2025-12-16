@@ -84,9 +84,10 @@ function topNKeys(obj, n) {
     .map(([k]) => k);
 }
 
-function recommendProductsJS({ userId, reviewsFile, metadataFile, topN = 30 }) {
-  const reviewsData = loadJsonLines(reviewsFile);
-  const metadataData = loadJsonLines(metadataFile);
+function recommendProductsJS({ userId, reviewsFile, metadataFile, topN = 30, reviewsData = null, metadataData = null }) {
+  // allow passing preloaded arrays (e.g., to include DB reviews) or fallback to file loading
+  if (!reviewsData) reviewsData = loadJsonLines(reviewsFile);
+  if (!metadataData) metadataData = loadJsonLines(metadataFile);
 
   if (reviewsData.length === 0) {
     return { userId, recommendations: [], message: "No reviews data found" };
@@ -193,23 +194,142 @@ function recommendProductsJS({ userId, reviewsFile, metadataFile, topN = 30 }) {
 async function getRecommendations(req, res) {
   try {
     const topN = Number(req.query.top_n) || 30;
-    const userId =
-      DEMO_USER_IDS[Math.floor(Math.random() * DEMO_USER_IDS.length)];
+    const requestedUserId = req.query.user_id;
     const reviewsFile = path.join(__dirname, "..", "data", "absa_reviews.json");
     const metadataFile = path.join(__dirname, "..", "data", "metadata.jsonl");
 
-    const result = recommendProductsJS({
-      userId,
-      reviewsFile,
-      metadataFile,
-      topN,
+    // If user_id provided, use it; otherwise use a demo user id
+    let userId = requestedUserId || DEMO_USER_IDS[Math.floor(Math.random() * DEMO_USER_IDS.length)];
+
+    // Attempt to load user demographics from DB to handle cold-start
+    const User = require('../models/userModel');
+    const Review = require('../models/reviewModel');
+
+    // Load file-based reviews and metadata
+    const reviewsData = loadJsonLines(reviewsFile);
+    const metadataData = loadJsonLines(metadataFile);
+
+    // Merge any DB reviews for this user into userReviews
+    const dbReviews = await Review.find({ user_id: userId }).lean().exec().catch(() => []);
+    const fileUserReviews = reviewsData.filter((r) => r.user_id === userId);
+    const userReviews = fileUserReviews.concat(dbReviews);
+
+    // Check if user has enough interactions (reviews + likes) to use LightFM
+    const UserModel = require('../models/userModel');
+    const dbUser = await UserModel.findOne({ user_id: userId }).lean().exec().catch(() => null);
+    const likesCount = dbUser && Array.isArray(dbUser.likedProducts) ? dbUser.likedProducts.length : 0;
+    const interactionsCount = userReviews.length + likesCount;
+    const LIGHTFM_THRESHOLD = Number(process.env.LIGHTFM_THRESHOLD || 5); // tune via env
+
+    if (interactionsCount >= LIGHTFM_THRESHOLD) {
+      // Try to load precomputed LightFM recommendations from disk
+      try {
+        const lmPath = path.join(__dirname, '..', 'data', 'lightfm_recs.json');
+        if (fs.existsSync(lmPath)) {
+          const raw = fs.readFileSync(lmPath, 'utf-8');
+          const lm = JSON.parse(raw);
+          if (lm[userId] && lm[userId].length > 0) {
+            return res.json({ userId, recommendations: lm[userId], model_used: 'lightfm' });
+          }
+        }
+      } catch (e) {
+        console.error('Error loading lightfm recs:', e);
+      }
+      // fallback to aspect-based if LightFM not available for this user
+      const mergedReviews = reviewsData.concat(dbReviews);
+      const rec = recommendProductsJS({ userId, topN, reviewsData: mergedReviews, metadataData });
+      return res.json({ ...rec, model_used: 'aspect_based (fallback)' });
+    }
+
+    // If there are user reviews (from file or DB), run normal aspect-based recommendation
+    if (userReviews.length > 0) {
+      const mergedReviews = reviewsData.concat(dbReviews);
+      const localRecommend = recommendProductsJS({ userId, topN, reviewsData: mergedReviews, metadataData });
+      return res.json({ ...localRecommend, model_used: 'aspect_based' });
+    }
+
+    // Cold-start: no reviews for this user; try demographic/location based popularity
+    const user = await User.findOne({ user_id: userId }).lean().exec();
+    let candidates = [];
+    if (user && (user.age_group || user.gender || user.location)) {
+      // Find similar users by exact matching demographic triplet
+      const query = { age_group: user.age_group, gender: user.gender, location: user.location };
+      // fallback to partial matches if exact match not found
+      let similarUsers = await User.find(query).lean().exec();
+      if (!similarUsers || similarUsers.length === 0) {
+        const orQueries = [];
+        if (user.age_group) orQueries.push({ age_group: user.age_group });
+        if (user.gender) orQueries.push({ gender: user.gender });
+        if (user.location) orQueries.push({ location: user.location });
+        if (orQueries.length) similarUsers = await User.find({ $or: orQueries }).lean().exec();
+      }
+
+      // Aggregate popularity from likedProducts and historical file reviews by these users
+      const LIKED_WEIGHT = Number(process.env.DEMO_LIKED_WEIGHT || 3);
+      const REVIEW_WEIGHT = Number(process.env.DEMO_REVIEW_WEIGHT || 1);
+      const popularity = new Map();
+      for (const su of similarUsers) {
+        if (Array.isArray(su.likedProducts)) {
+          for (const asin of su.likedProducts) popularity.set(asin, (popularity.get(asin) || 0) + LIKED_WEIGHT);
+        }
+      }
+      // from file reviews of similar users
+      const similarUserIds = new Set(similarUsers.map((s) => s.user_id));
+      for (const r of reviewsData) {
+        if (similarUserIds.has(r.user_id)) {
+          popularity.set(r.asin, (popularity.get(r.asin) || 0) + REVIEW_WEIGHT);
+        }
+      }
+
+      // if we have popularity candidates
+      if (popularity.size > 0) {
+        const items = Array.from(popularity.entries()).map(([asin, score]) => ({ asin, score }));
+        items.sort((a, b) => b.score - a.score);
+        candidates = items.slice(0, topN).map((it, idx) => {
+          const meta = metadataData.find((m) => (m.parent_asin === it.asin || m.asin === it.asin));
+          return {
+            rank: idx + 1,
+            asin: it.asin,
+            score: it.score,
+            title: meta ? meta.title : `Product ${it.asin}`,
+            images: meta ? meta.images || [] : [],
+            price: meta ? meta.price ?? null : null,
+            avg_rating: meta ? meta.average_rating || 0 : 0,
+            category: meta ? meta.main_category || '' : ''
+          };
+        });
+        return res.json({ userId, recommendations: candidates, message: 'Cold-start: demographic popularity' });
+      }
+    }
+
+    // If user exists but has no demographics, fall back to using a demo user model
+    if (user && !(user.age_group || user.gender || user.location)) {
+      const demoUser = DEMO_USER_IDS[Math.floor(Math.random() * DEMO_USER_IDS.length)];
+      const demoRecommend = recommendProductsJS({ userId: demoUser, reviewsFile, metadataFile, topN });
+      return res.json({ userId, recommendations: demoRecommend.recommendations, message: 'Fallback: demo user model' });
+    }
+
+    // Fallback: global popularity computed from file reviews
+    const countByAsin = {};
+    for (const r of reviewsData) countByAsin[r.asin] = (countByAsin[r.asin] || 0) + 1;
+    const globalItems = Object.entries(countByAsin).sort((a, b) => b[1] - a[1]).slice(0, topN);
+    const globalCandidates = globalItems.map(([asin, cnt], idx) => {
+      const meta = metadataData.find((m) => (m.parent_asin === asin || m.asin === asin));
+      return {
+        rank: idx + 1,
+        asin,
+        score: cnt,
+        title: meta ? meta.title : `Product ${asin}`,
+        images: meta ? meta.images || [] : [],
+        price: meta ? meta.price ?? null : null,
+        avg_rating: meta ? meta.average_rating || 0 : 0,
+        category: meta ? meta.main_category || '' : ''
+      };
     });
-    return res.json(result);
+    return res.json({ userId, recommendations: globalCandidates, message: 'Cold-start: global popularity' });
   } catch (err) {
-    console.error("Recommendation error:", err);
-    return res
-      .status(500)
-      .json({ error: "Failed to generate recommendations" });
+    console.error('Recommendation error:', err);
+    return res.status(500).json({ error: 'Failed to generate recommendations' });
   }
 }
 
