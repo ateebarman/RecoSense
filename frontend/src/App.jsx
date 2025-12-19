@@ -13,6 +13,7 @@ import AdminPanel from "./pages/AdminPanel";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import Orders from "./pages/Orders";
+import ChangePassword from "./pages/ChangePassword";
 
 function App() {
   const { user_id } = useUser();
@@ -65,6 +66,10 @@ function App() {
           <Route
             path="/orders"
             element={user_id ? <Orders /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/change-password"
+            element={user_id ? <ChangePassword /> : <Navigate to="/login" />}
           />
           <Route
             path="*"

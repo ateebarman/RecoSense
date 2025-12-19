@@ -70,7 +70,7 @@ const Cart = () => {
                 />
               </div>
               <div className="item-details">
-                <Link to={`/product/${item.asin}`} className="item-title">
+                <Link to={`/product/${encodeURIComponent(item.asin)}`} className="item-title">
                   {item.title}
                 </Link>
                 <p className="item-brand">{item.brand}</p>

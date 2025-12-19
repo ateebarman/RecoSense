@@ -8,8 +8,7 @@ You can deploy them as two separate services (recommended) or as a single servic
 - `MONGO_URI` (required for backend) — MongoDB connection string (e.g., Atlas).
 - `PORT` — optional; hosting platform usually sets this.
 - `VITE_API_URL` (optional for frontend) — full URL to backend API, e.g. `https://my-backend.onrender.com/api`. If not set, the frontend will call relative `/api`.
-- `SERVE_FRONTEND=true` (optional for backend) — when set, backend will serve files from `frontend/dist` (single-service deploy).
-
+- `SERVE_FRONTEND=true` (optional for backend) — when set, backend will serve files from `frontend/dist` (single-service deploy).- `JWT_SECRET` — secret used to sign JSON Web Tokens (used for auth). **Set this to a long random value in production.** If not set, the server uses a default fallback which is not secure for public deployments.
 ---
 
 ## Option A — Recommended: Two services (frontend + backend)
@@ -39,6 +38,7 @@ Backend (Web Service):
 - **Start Command:** `npm start`
 - **Environment:** Node
 - **Env Vars:** `MONGO_URI` = `<your-mongo-uri>` (required). Optionally set `SERVE_FRONTEND=true` if you want the backend to serve the frontend build from `frontend/dist`.
+- **Auth:** set `JWT_SECRET` to a secure random value in production to sign JWT tokens (recommended).
 
 Frontend (Static Site):
 - **Root Directory:** `frontend`
@@ -138,7 +138,8 @@ Cons: larger deploy artifact, you must rebuild frontend before starting backend.
 ---
 
 ## Local testing tips
-- Backend: create `.env` in `backend` with `MONGO_URI` set and run `npm run dev` (uses `nodemon`).
+- Backend: create `.env` in `backend` with `MONGO_URI` set and run `npm run dev` (uses `nodemon`). Optionally set `JWT_SECRET` in `.env` to a secure value — otherwise a default fallback is used (not recommended for public deployments).
+- Seeding & passwords: running `npm run seed` will create users derived from review data; seeded users are created with a default password of `123456` (hashed). To set the default password on existing accounts you can run `npm run set-passwords`. To create or update a convenient admin account with `user_id` = `1` (password `123456`) run `npm run create-admin`.
 - Frontend: run `npm run dev` from `frontend`. To point the frontend to a deployed backend during development, set `VITE_API_URL` (e.g., `VITE_API_URL=https://...`), or use a proxy.
 
 ---

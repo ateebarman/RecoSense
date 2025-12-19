@@ -3,10 +3,23 @@ import axios from "axios";
 // If not provided, frontend will call relative `/api` (useful when proxied or when backend is same origin).
 const BASE_URL = (import.meta && import.meta.env && import.meta.env.VITE_API_URL) ? import.meta.env.VITE_API_URL : "/api";
 const api = axios.create({ baseURL: BASE_URL });
+
+// Attach JWT token from localStorage automatically
+api.interceptors.request.use((config) => {
+  try {
+    const token = localStorage.getItem('token');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+  } catch (e) {}
+  return config;
+});
+
 export const getProducts = (opts = {}) => api.get("/products", { params: opts });
 export const getProductByAsin = (asin) => api.get(`/products/${asin}`);
 export const getUser = (reviewerID) => api.get(`/user/${reviewerID}`);
 export const registerUser = (data) => api.post('/user/register', data);
+export const loginUser = (user_id, password) => api.post('/user/login', { user_id, password });
+export const changePassword = (currentPassword, newPassword) => api.post('/user/change-password', { currentPassword, newPassword });
+export const getMe = () => api.get('/user/me');
 export const toggleLike = (reviewerID, asin) =>
   api.put(`/user/${reviewerID}/like`, { asin });
 export const getUserReviews = (reviewerID) => api.get(`/reviews/${reviewerID}`);

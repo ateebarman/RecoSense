@@ -24,7 +24,7 @@ const ProductCard = ({ product, isLiked, onLike }) => {
     };
 
     return (
-        <Link to={`/product/${product.asin}`} className="product-card-link">
+        <Link to={`/product/${encodeURIComponent(product.asin)}`} className="product-card-link">
             <div className="product-card">
                 <img src={imageUrl} alt={product.title} />
                 <h3>{product.title || 'No Title'}</h3>

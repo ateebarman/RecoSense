@@ -66,7 +66,7 @@ const Recommendations = () => {
                 {rec.top_aspects && rec.top_aspects.length > 0 && (
                   <p>Strengths: {rec.top_aspects.join(", ")}</p>
                 )}
-                <Link to={`/product/${rec.asin}`}>View details</Link>
+                <Link to={`/product/${encodeURIComponent(rec.asin)}`}>View details</Link>
               </div>
             ))}
           </div>

@@ -2,8 +2,8 @@ const User = require('../models/userModel');
 
 module.exports = async function requireAdmin(req, res, next) {
   try {
-    // Expect logged-in user id to be sent in header 'x-user-id'
-    const userId = req.header('x-user-id');
+    // Prefer auth middleware user, fallback to header
+    const userId = (req.user && req.user.user_id) || req.header('x-user-id');
     if (!userId) return res.status(401).json({ message: 'Missing user id header' });
     const u = await User.findOne({ user_id: userId }).lean().exec();
     if (!u || !u.isAdmin) return res.status(403).json({ message: 'Admin privileges required' });

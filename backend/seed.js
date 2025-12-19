@@ -53,6 +53,11 @@ const seedDatabase = async () => {
             }
         });
         const usersToSeed = Array.from(userMap.values());
+        // set default password for seeded users
+        const bcrypt = require('bcryptjs');
+        for (const u of usersToSeed) {
+            u.password = await bcrypt.hash('123456', 10);
+        }
         await User.insertMany(usersToSeed);
         console.log(`${usersToSeed.length} unique users seeded (with demo demographics).`);
 

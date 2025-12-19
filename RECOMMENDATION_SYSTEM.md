@@ -294,8 +294,8 @@ Fetch recommendations for a user.
 #### 2. **POST /api/recommendations/model/run** ⚙️ (Admin Only)
 Manually trigger an infer-only model run.
 
-**Headers:**
-- `x-user-id`: Admin user ID (checked against isAdmin field)
+**Auth:**
+- Prefer `Authorization: Bearer <token>` where the token belongs to an admin user. For backwards compatibility the server will also accept `x-user-id` header containing an admin user id (legacy mode), but using JWT is recommended.
 
 **Response:**
 ```json
@@ -360,6 +360,50 @@ Reset counters to zero.
   "reviews": 0
 }
 ```
+
+---
+
+### Authentication & User Endpoints
+
+#### A. **POST /api/user/login**
+Authenticate a user and receive a JWT.
+
+**Body:**
+```json
+{ "user_id": "USER_123", "password": "your-password" }
+```
+
+**Response:**
+```json
+{ "token": "<jwt>", "user": { "user_id": "USER_123", "reviewerName": "John", "isAdmin": false } }
+```
+
+#### B. **POST /api/user/register**
+Register a new user (password optional). If `password` is supplied it's stored hashed.
+
+**Body:**
+```json
+{ "user_id": "optional", "reviewerName": "Name", "password": "pass123", "age_group": "25-34", "gender": "other", "location": "US" }
+```
+
+**Response:**
+- 201 Created with the created user object (no `password` field returned)
+
+#### C. **POST /api/user/change-password** (Authenticated)
+Change the logged-in user's password. Requires `Authorization: Bearer <token>` header.
+
+**Body:**
+```json
+{ "currentPassword": "old", "newPassword": "new" }
+```
+
+**Response:**
+```json
+{ "message": "Password updated" }
+```
+
+#### D. **GET /api/user/me** (Authenticated)
+Get the authenticated user's profile (no `password` field). Requires `Authorization: Bearer <token>`.
 
 ---
 

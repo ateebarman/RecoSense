@@ -31,6 +31,7 @@ const Navbar = () => {
       </div>
       <div className="navbar-user">
         <span>Welcome, {userName || "Reviewer"}</span>
+        <NavLink to="/change-password" style={{ marginLeft: '10px', marginRight: '10px' }}>Change Password</NavLink>
         <button onClick={handleLogout}>Logout</button>
       </div>
     </nav>

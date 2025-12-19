@@ -1,4 +1,6 @@
 const Product = require('../models/productModel');
+const fs = require('fs');
+const path = require('path');
 
 exports.getProducts = async (req, res) => {
     try {
@@ -29,12 +31,58 @@ exports.getProducts = async (req, res) => {
     } catch (error) { res.status(500).json({ message: 'Server Error' }); }
 };
 
+// Try DB first, then fall back to metadata file when product not found in DB
 exports.getProductByAsin = async (req, res) => {
     try {
-        const product = await Product.findOne({ asin: req.params.asin });
-        if (!product) {
+        const asin = req.params.asin;
+        const product = await Product.findOne({ asin }).lean().exec();
+        if (product) return res.json(product);
+
+        // DB miss: attempt to load metadata.jsonl and find matching record
+        const metadataPath = path.join(__dirname, '..', 'data', 'metadata.jsonl');
+        if (!fs.existsSync(metadataPath)) {
             return res.status(404).json({ message: 'Product not found' });
         }
-        res.json(product);
-    } catch (error) { res.status(500).json({ message: 'Server Error' }); }
+        const raw = fs.readFileSync(metadataPath, 'utf-8');
+        const lines = raw.split(/\r?\n/).filter(Boolean);
+        let found = null;
+        for (const line of lines) {
+            try {
+                const obj = JSON.parse(line);
+                if (obj.asin === asin || obj.parent_asin === asin) {
+                    found = obj;
+                    break;
+                }
+            } catch (e) {
+                // ignore malformed lines
+                const m = line.match(/(\{[\s\S]*\})/);
+                if (m) {
+                    try {
+                        const obj = JSON.parse(m[1]);
+                        if (obj.asin === asin || obj.parent_asin === asin) {
+                            found = obj;
+                            break;
+                        }
+                    } catch (err) { /* ignore */ }
+                }
+            }
+        }
+
+        if (!found) return res.status(404).json({ message: 'Product not found' });
+
+        // map metadata record to product-like response
+        const mapped = {
+            asin: found.asin || asin,
+            title: found.title || `Product ${asin}`,
+            description: Array.isArray(found.description) ? found.description : (found.description ? [found.description] : []),
+            price: found.price ? String(found.price) : null,
+            brand: found.brand || '',
+            imageURLHighRes: Array.isArray(found.images) ? found.images.map(img => img.large || img.thumb || img) : [],
+            categories: found.main_category ? [[found.main_category]] : [],
+        };
+        return res.json(mapped);
+    } catch (error) {
+        console.error('Error in getProductByAsin:', error);
+        res.status(500).json({ message: 'Server Error' });
+    }
 };
