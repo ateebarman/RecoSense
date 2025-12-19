@@ -37,10 +37,10 @@ export default function AdminPanel() {
   };
   const refresh = async () => { setLoading(true); try { setStatus(await retrainStatus()); } catch (e) { setStatus({ error: String(e) }); } setLoading(false); };
   return (
-    <div style={{ padding: 20 }}>
+    <div className="admin-panel container">
       <h2>Admin Panel</h2>
       <p>User: {user_id}</p>
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div className="admin-actions">
         <button onClick={trigger} disabled={loading}>Trigger Retrain</button>
         <button onClick={clean} disabled={loading}>Clean Rec File</button>
         <button onClick={run} disabled={loading}>Run Model (Infer-Only)</button>
@@ -48,7 +48,7 @@ export default function AdminPanel() {
         <button onClick={resetCounters} disabled={loading}>Reset Counters</button>
         <button onClick={refresh} disabled={loading}>Refresh Status</button>
       </div>
-      <pre style={{ marginTop: 12, padding: 12 }}>{JSON.stringify(status, null, 2)}</pre>
+      <pre className="admin-output">{JSON.stringify(status, null, 2)}</pre>
     </div>
   );
 }
