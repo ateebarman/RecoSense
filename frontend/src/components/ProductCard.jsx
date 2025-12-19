@@ -26,7 +26,7 @@ const ProductCard = ({ product, isLiked, onLike }) => {
     return (
         <Link to={`/product/${encodeURIComponent(product.asin)}`} className="product-card-link">
             <div className="product-card">
-                <img src={imageUrl} alt={product.title} />
+                <img src={imageUrl} alt={product.title} loading="lazy" />
                 <h3>{product.title || 'No Title'}</h3>
                 <p>{product.brand || 'No Brand'}</p>
                 <p className="price">{product.price || 'N/A'}</p>
@@ -38,6 +38,8 @@ const ProductCard = ({ product, isLiked, onLike }) => {
                             e.stopPropagation();
                             onLike(product.asin);
                         }}
+                        aria-pressed={isLiked}
+                        aria-label={isLiked ? 'Unlike product' : 'Like product'}
                     >
                         &#x2764;
                     </button>
