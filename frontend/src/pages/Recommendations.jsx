@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { getRecommendations } from "../services/api";
 import { useUser } from "../context/UserContext";
 import { Link } from "react-router-dom";
+import ProductCard from "../components/ProductCard";
 
 const Recommendations = () => {
   const [loading, setLoading] = useState(true);
@@ -46,29 +47,18 @@ const Recommendations = () => {
           {data.model_used && <p style={{ color: 'green' }}>Model: {data.model_used}</p>}
           {data.message && <p style={{ color: 'gray' }}>{data.message}</p>}
           <div className="product-grid">
-            {data.recommendations.map((rec) => (
-              <div key={rec.asin} className="product-card">
-                {rec.images && rec.images[0] && (
-                  <img
-                    src={rec.images[0].large || rec.images[0].thumb}
-                    alt={rec.title}
-                    style={{ maxHeight: 160, objectFit: "contain" }}
-                  />
-                )}
-                <h4 title={rec.title}>{rec.title || `Product ${rec.asin}`}</h4>
-                {rec.price !== null && <p>Price: $ {String(rec.price)}</p>}
-                {rec.avg_rating > 0 && <p>Avg. Rating: {rec.avg_rating}/5</p>}
-                {rec.category && <p>Category: {rec.category}</p>}
-                {/* <p>
-                  Score: {rec.score.toFixed(4)} | Sim:{" "}
-                  {rec.similarity.toFixed(4)}
-                </p> */}
-                {rec.top_aspects && rec.top_aspects.length > 0 && (
-                  <p>Strengths: {rec.top_aspects.join(", ")}</p>
-                )}
-                <Link to={`/product/${encodeURIComponent(rec.asin)}`}>View details</Link>
-              </div>
-            ))}
+            {data.recommendations.map((rec) => {
+              const product = {
+                asin: rec.asin,
+                title: rec.title || `Product ${rec.asin}`,
+                price: rec.price ? `$${rec.price}` : null,
+                brand: rec.category || '',
+                imageURLHighRes: (rec.images || []).map(img => img.large || img.thumb).filter(Boolean)
+              };
+              return (
+                <ProductCard key={rec.asin} product={product} isLiked={false} onLike={() => {}} />
+              );
+            })}
           </div>
         </>
       )}

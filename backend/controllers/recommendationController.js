@@ -285,19 +285,64 @@ async function getRecommendations(req, res) {
       if (popularity.size > 0) {
         const items = Array.from(popularity.entries()).map(([asin, score]) => ({ asin, score }));
         items.sort((a, b) => b.score - a.score);
-        candidates = items.slice(0, topN).map((it, idx) => {
+
+        // Prefer items with metadata and images first
+        const withImages = items.filter((it) => {
           const meta = metadataData.find((m) => (m.parent_asin === it.asin || m.asin === it.asin));
-          return {
-            rank: idx + 1,
+          return meta && Array.isArray(meta.images) && meta.images.length > 0 && meta.title;
+        });
+
+        // Then items that at least have a title
+        const withTitle = items.filter((it) => {
+          const meta = metadataData.find((m) => (m.parent_asin === it.asin || m.asin === it.asin));
+          return meta && meta.title && !(Array.isArray(meta.images) && meta.images.length > 0);
+        });
+
+        const prioritized = [...withImages, ...withTitle];
+
+        candidates = [];
+        for (const it of prioritized) {
+          if (candidates.length >= topN) break;
+          const meta = metadataData.find((m) => (m.parent_asin === it.asin || m.asin === it.asin));
+          if (!meta || !meta.title) continue; // skip entries without useful metadata
+          candidates.push({
+            rank: candidates.length + 1,
             asin: it.asin,
             score: it.score,
-            title: meta ? meta.title : `Product ${it.asin}`,
-            images: meta ? meta.images || [] : [],
-            price: meta ? meta.price ?? null : null,
-            avg_rating: meta ? meta.average_rating || 0 : 0,
-            category: meta ? meta.main_category || '' : ''
-          };
-        });
+            title: meta.title,
+            images: meta.images || [],
+            price: meta.price ?? null,
+            avg_rating: meta.average_rating || 0,
+            category: meta.main_category || ''
+          });
+        }
+
+        // If still short, fill with globally popular items that have images
+        if (candidates.length < topN) {
+          const existingAsins = new Set(candidates.map((c) => c.asin));
+          const countByAsin = {};
+          for (const r of reviewsData) countByAsin[r.asin] = (countByAsin[r.asin] || 0) + 1;
+          const globalItems = Object.entries(countByAsin)
+            .map(([asin, cnt]) => ({ asin, cnt, meta: metadataData.find((m) => (m.parent_asin === asin || m.asin === asin)) }))
+            .filter((it) => !existingAsins.has(it.asin) && it.meta && Array.isArray(it.meta.images) && it.meta.images.length > 0)
+            .sort((a, b) => b.cnt - a.cnt);
+
+          for (const it of globalItems) {
+            if (candidates.length >= topN) break;
+            candidates.push({
+              rank: candidates.length + 1,
+              asin: it.asin,
+              score: it.cnt,
+              title: it.meta.title,
+              images: it.meta.images || [],
+              price: it.meta.price ?? null,
+              avg_rating: it.meta.average_rating || 0,
+              category: it.meta.main_category || ''
+            });
+          }
+        }
+
+        // Return only items with metadata/title (avoid ASIN-only blanks)
         return res.json({ userId, recommendations: candidates, message: 'Cold-start: demographic popularity' });
       }
     }
@@ -309,23 +354,25 @@ async function getRecommendations(req, res) {
       return res.json({ userId, recommendations: demoRecommend.recommendations, message: 'Fallback: demo user model' });
     }
 
-    // Fallback: global popularity computed from file reviews
+    // Fallback: global popularity computed from file reviews (only include items with metadata and images)
     const countByAsin = {};
     for (const r of reviewsData) countByAsin[r.asin] = (countByAsin[r.asin] || 0) + 1;
-    const globalItems = Object.entries(countByAsin).sort((a, b) => b[1] - a[1]).slice(0, topN);
-    const globalCandidates = globalItems.map(([asin, cnt], idx) => {
-      const meta = metadataData.find((m) => (m.parent_asin === asin || m.asin === asin));
-      return {
-        rank: idx + 1,
-        asin,
-        score: cnt,
-        title: meta ? meta.title : `Product ${asin}`,
-        images: meta ? meta.images || [] : [],
-        price: meta ? meta.price ?? null : null,
-        avg_rating: meta ? meta.average_rating || 0 : 0,
-        category: meta ? meta.main_category || '' : ''
-      };
-    });
+    const globalItems = Object.entries(countByAsin)
+      .map(([asin, cnt]) => ({ asin, cnt, meta: metadataData.find((m) => (m.parent_asin === asin || m.asin === asin)) }))
+      .filter((it) => it.meta && Array.isArray(it.meta.images) && it.meta.images.length > 0 && it.meta.title)
+      .sort((a, b) => b.cnt - a.cnt)
+      .slice(0, topN);
+
+    const globalCandidates = globalItems.map((it, idx) => ({
+      rank: idx + 1,
+      asin: it.asin,
+      score: it.cnt,
+      title: it.meta.title,
+      images: it.meta.images || [],
+      price: it.meta.price ?? null,
+      avg_rating: it.meta.average_rating || 0,
+      category: it.meta.main_category || ''
+    }));
     return res.json({ userId, recommendations: globalCandidates, message: 'Cold-start: global popularity' });
   } catch (err) {
     console.error('Recommendation error:', err);
