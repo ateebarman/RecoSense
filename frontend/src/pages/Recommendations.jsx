@@ -48,15 +48,22 @@ const Recommendations = () => {
           {data.message && <p style={{ color: 'gray' }}>{data.message}</p>}
           <div className="product-grid">
             {data.recommendations.map((rec) => {
+              // Handle different image formats (flat strings or large/thumb objects)
+              const images = Array.isArray(rec.images) ? rec.images : [];
+              const refinedImages = images.map(img => {
+                if (typeof img === 'string') return img;
+                return img.large || img.thumb || (typeof img === 'object' ? Object.values(img)[0] : null);
+              }).filter(Boolean);
+
               const product = {
                 asin: rec.asin,
                 title: rec.title || `Product ${rec.asin}`,
-                price: rec.price ? `$${rec.price}` : null,
-                brand: rec.category || '',
-                imageURLHighRes: (rec.images || []).map(img => img.large || img.thumb).filter(Boolean)
+                price: rec.price ? (String(rec.price).startsWith('$') ? rec.price : `$${rec.price}`) : null,
+                brand: rec.category || rec.brand || '',
+                imageURLHighRes: refinedImages
               };
               return (
-                <ProductCard key={rec.asin} product={product} isLiked={false} onLike={() => {}} />
+                <ProductCard key={rec.asin} product={product} isLiked={false} onLike={() => { }} />
               );
             })}
           </div>

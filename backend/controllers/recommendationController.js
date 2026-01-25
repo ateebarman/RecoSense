@@ -168,24 +168,26 @@ function recommendProductsJS({ userId, reviewsFile, metadataFile, topN = 30, rev
 
   itemScores.sort((a, b) => b.score - a.score);
 
-  const recommendations = itemScores.slice(0, topN).map((it, idx) => {
+  const recommendations = itemScores.map((it) => {
     let meta = metaByAsin.get(it.asin);
+    if (!meta || !meta.title) return null; // Skip products with no metadata/title
+
     const rec = {
-      rank: idx + 1,
       asin: it.asin,
       score: Number(it.score.toFixed(6)),
       similarity: Number(it.similarity.toFixed(6)),
       top_aspects: it.top_aspects,
+      title: meta.title,
+      price: meta.price ?? null,
+      category: meta.main_category || "",
+      avg_rating: meta.average_rating || 0,
+      images: meta.images || [],
     };
-    if (meta) {
-      rec.title = meta.title || `Product ${it.asin}`;
-      rec.price = meta.price ?? null;
-      rec.category = meta.main_category || "";
-      rec.avg_rating = meta.average_rating || 0;
-      rec.images = meta.images || [];
-    }
     return rec;
-  });
+  })
+  .filter(Boolean)
+  .slice(0, topN)
+  .map((rec, idx) => ({ ...rec, rank: idx + 1 }));
 
   return { userId, recommendations };
 }
@@ -229,7 +231,28 @@ async function getRecommendations(req, res) {
           const raw = fs.readFileSync(lmPath, 'utf-8');
           const lm = JSON.parse(raw);
           if (lm[userId] && lm[userId].length > 0) {
-            return res.json({ userId, recommendations: lm[userId], model_used: 'lightfm' });
+            // Enrich LightFM recommendations with DB metadata (especially images)
+            const enriched = [];
+            const Product = require('../models/productModel');
+            for (const rec of lm[userId]) {
+              const dbProd = await Product.findOne({ asin: rec.asin }).lean().exec().catch(() => null);
+              if (dbProd) {
+                enriched.push({
+                  ...rec,
+                  title: dbProd.title || rec.title,
+                  price: dbProd.price || rec.price,
+                  images: (Array.isArray(dbProd.imageURLHighRes) && dbProd.imageURLHighRes.length > 0) 
+                    ? dbProd.imageURLHighRes 
+                    : rec.images,
+                  category: dbProd.brand || rec.category || ''
+                });
+              } else if (rec.title) {
+                // Keep if it already has a title from the file
+                enriched.push(rec);
+              }
+              // If no DB record and no title in file, we skip it (remove broken products)
+            }
+            return res.json({ userId, recommendations: enriched, model_used: 'lightfm' });
           }
         }
       } catch (e) {

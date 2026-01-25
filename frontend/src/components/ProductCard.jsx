@@ -6,7 +6,7 @@ const ProductCard = ({ product, isLiked, onLike }) => {
     const { addItemToCart } = useCart();
     const [isAddingToCart, setIsAddingToCart] = useState(false);
 
-    const defaultImage = 'https://via.placeholder.com/200';
+    const defaultImage = 'https://placehold.co/400x500/1e1e1e/white?text=No+Image';
     const imageUrl = product.imageURLHighRes?.[0] || defaultImage;
 
     const handleAddToCart = async (e) => {
