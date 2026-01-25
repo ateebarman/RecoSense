@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
 import { loginUser } from '../services/api';
 
@@ -24,8 +24,8 @@ const Login = () => {
                 <input type="text" placeholder="Enter your USER ID" value={id} onChange={(e) => setId(e.target.value)} />
                 <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
                 <button type="submit">Login</button>
-                {error && <p className="error-message" style={{ color: 'red' }}>{error}</p>}
-                <p style={{ marginTop: '10px' }}>New here? <a href="/register">Register</a></p>
+                {error && <p className="error-message">{error}</p>}
+                <p className="form-helper-text">New here? <Link to="/register">Register</Link></p>
             </form>
         </div>
     );

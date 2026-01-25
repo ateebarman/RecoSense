@@ -20,7 +20,7 @@ const Navbar = () => {
 
   return (
     <nav className="navbar">
-      <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+      <div className="navbar-header">
         <div className="navbar-brand">Recommender</div>
         <button
           className="navbar-toggle"
@@ -47,7 +47,7 @@ const Navbar = () => {
 
       <div className="navbar-user">
         <span>Welcome, {userName || "Reviewer"}</span>
-        <NavLink to="/change-password" style={{ marginLeft: '10px', marginRight: '10px' }} onClick={closeIfOpen}>Change Password</NavLink>
+        <NavLink to="/change-password" className="nav-link-item" onClick={closeIfOpen}>Change Password</NavLink>
         <button onClick={() => { handleLogout(); closeIfOpen(); }}>Logout</button>
       </div>
     </nav>

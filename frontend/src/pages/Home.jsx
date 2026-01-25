@@ -32,7 +32,7 @@ const Home = () => {
     return (
         <div>
             <h1 className="page-title">All Smartphones</h1>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="page-header-controls">
                 <div className="page-actions">
                     <button onClick={() => fetchData({ random: true, size: 60 })}>Refresh</button>
                     <button onClick={() => fetchData({})}>Show All</button>

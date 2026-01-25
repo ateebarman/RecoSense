@@ -53,7 +53,7 @@ const Register = () => {
         </select>
         <input name="location" placeholder="Location (e.g., US, India)" value={form.location} onChange={handleChange} />
         <button type="submit">Register</button>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
+        {error && <p className="error-message">{error}</p>}
       </form>
     </div>
   );
