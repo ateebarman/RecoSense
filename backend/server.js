@@ -10,6 +10,7 @@ const reviewRoutes = require("./routes/reviewRoutes");
 const recommendationRoutes = require("./routes/recommendationRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const orderRoutes = require("./routes/orderRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -47,6 +48,7 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/recommendations", recommendationRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Optional scheduled retrain (set RETRAIN_CRON env like '0 3 * * *' to run daily at 03:00)
 if (process.env.RETRAIN_CRON) {

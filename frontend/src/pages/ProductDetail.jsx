@@ -63,22 +63,57 @@ const ProductDetail = () => {
     if (error) return <p className="error-message">{error}</p>;
     if (!product) return <p>Product not found.</p>;
 
-    const defaultImage = 'https://via.placeholder.com/300';
+    const defaultImage = 'https://placehold.co/400x400/1e1e1e/white?text=No+Image';
     const imageUrl = product.imageURLHighRes?.[0] || defaultImage;
+
+    const renderAspectScores = (review) => {
+        const aspects = [
+            { label: '🔋 Battery', key: 'battery_score' },
+            { label: '📸 Camera', key: 'camera_score' },
+            { label: '📱 Screen', key: 'screen_score' },
+            { label: '💰 Price', key: 'price_score' },
+            { label: '⚙️ Software', key: 'software_score' },
+            { label: '💎 Quality', key: 'quality_score' }
+        ];
+
+        return (
+            <div className="aspect-scores">
+                {aspects.map(aspect => {
+                    const score = review[aspect.key];
+                    if (score && score !== 0) {
+                        const isPositive = score > 0;
+                        return (
+                            <span key={aspect.key} className={`aspect-badge ${isPositive ? 'pos' : 'neg'}`}>
+                                {aspect.label}: {isPositive ? '+' : ''}{score.toFixed(1)}
+                            </span>
+                        );
+                    }
+                    return null;
+                })}
+            </div>
+        );
+    };
 
     return (
         <div className="product-detail-container">
             <div className="product-info">
-                <img
-                    src={imageUrl}
-                    alt={product.title}
-                    className="product-detail-image"
-                />
+                <div className="product-image-wrapper">
+                    <img
+                        src={imageUrl}
+                        alt={product.title}
+                        className="product-detail-image"
+                    />
+                </div>
                 <div className="product-detail-text">
+                    <div className="breadcrumb">Products &gt; {product.brand} &gt; {product.asin}</div>
                     <h1>{product.title}</h1>
-                    <h2>{product.brand}</h2>
+                    <div className="brand-tag">{product.brand}</div>
                     <p className="price-detail">{product.price}</p>
-                    <p>{product.description?.join(' ')}</p>
+
+                    <div className="description-box">
+                        <h3>Description</h3>
+                        <p>{product.description?.join(' ')}</p>
+                    </div>
 
                     <div className="product-actions">
                         <div className="quantity-selector">
@@ -104,29 +139,51 @@ const ProductDetail = () => {
                     </div>
                 </div>
             </div>
+
             <div className="reviews-section">
+                <div className="reviews-header">
+                    <h2>Customer Reviews</h2>
+                    <p>{reviews.length} Verified Reviews</p>
+                </div>
+
                 <AddReviewForm
                     asin={asin}
                     user_id={user_id}
                     reviewerName={userName}
                     onReviewAdded={handleReviewAdded}
                 />
-                <h2>Customer Reviews</h2>
+
                 <div className="reviews-list">
                     {reviews.length > 0 ? (
                         reviews.map((review, index) => (
-                            <div key={index} className="review-item">
-                                <h4>{review.summary}</h4>
-                                <p className="rating">Rating: {review.overall}/5</p>
-                                <p>{review.reviewText}</p>
-                                <small>
-                                    By: {review.reviewerName || 'Anonymous'} on{' '}
-                                    {review.reviewTime}
-                                </small>
+                            <div key={review._id || index} className="review-card">
+                                <div className="review-meta">
+                                    <div className="reviewer-info">
+                                        <div className="user-avatar">{review.reviewerName?.[0] || 'U'}</div>
+                                        <div>
+                                            <span className="reviewer-name">{review.reviewerName || 'Anonymous'}</span>
+                                            <span className="review-date">{review.reviewTime}</span>
+                                        </div>
+                                    </div>
+                                    <div className="star-rating">
+                                        {[...Array(5)].map((_, i) => (
+                                            <span key={i} className={i < review.overall ? 'star filled' : 'star'}>★</span>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <h4 className="review-summary">{review.summary}</h4>
+                                <div className="review-text-container">
+                                    <p className="review-body">{review.reviewText}</p>
+                                </div>
+
+                                {renderAspectScores(review)}
+
+                                {review.verified && <span className="verified-badge">✓ Verified Purchase</span>}
                             </div>
                         ))
                     ) : (
-                        <p>No reviews yet. Be the first to add one!</p>
+                        <p className="no-reviews">No reviews yet. Be the first to share your experience!</p>
                     )}
                 </div>
             </div>

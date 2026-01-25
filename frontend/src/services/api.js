@@ -62,4 +62,12 @@ export const cancelOrder = (orderId) =>
 export const getOrderStats = (user_id) =>
   api.get(`/orders/${user_id}/stats`);
 
+// Admin APIs
+export const getAdminStats = (user_id) =>
+  api.get('/admin/stats', { headers: { 'x-user-id': user_id } });
+export const reRunModel = (user_id) =>
+  api.post('/admin/run-model', {}, { headers: { 'x-user-id': user_id } });
+export const triggerManualRetrain = (user_id) =>
+  api.post('/admin/retrain', {}, { headers: { 'x-user-id': user_id } });
+
 export default api;
