@@ -141,13 +141,18 @@ async function startRetrain() {
 
   py.stdout.on('data', (data) => console.log(`[Retrain-Py-Out]: ${data.toString().trim()}`));
   py.stderr.on('data', (data) => console.error(`[Retrain-Py-Err]: ${data.toString().trim()}`));
-
   py.on('exit', async (code) => {
     console.log(`[RetrainManager] Python process exited with code ${code}`);
     const finished_at = new Date();
     const status = code === 0 ? 'success' : 'failed';
     const msg = `exit:${code}`;
     const curStatus = await readStatus();
+
+    // If success, sync file to DB
+    if (code === 0) {
+        await syncFileToDb(outLog);
+    }
+    
     await writeStatus({ 
       status, 
       pid: null, 
@@ -158,11 +163,6 @@ async function startRetrain() {
       errLog,
       mode: 'train'
     });
-    
-    // If success, sync file to DB
-    if (code === 0) {
-        syncFileToDb(outLog);
-    }
   });
   py.on('error', async (err) => {
     console.error(`[RetrainManager] Python process error:`, err);
@@ -224,8 +224,9 @@ async function startModelRun() {
     await writeCounters({ pending: 0, likes: 0, reviews: 0 });
     return { started: true };
   } catch (err) {
-    const finished_at = new Date().toISOString();
-    writeStatus({ status: 'failed', pid: null, started_at: readStatus().started_at || null, finished_at, msg: String(err), outLog, errLog, mode: 'infer' });
+    const finished_at = new Date();
+    const curStatus = await readStatus();
+    await writeStatus({ status: 'failed', pid: null, started_at: curStatus.started_at, finished_at, msg: String(err), outLog, errLog, mode: 'infer' });
     // fallback: try spawn python as last resort
     let pythonExec = process.env.PYTHON_EXECUTABLE || null;
     if (!pythonExec) {
@@ -281,24 +282,31 @@ async function incrementCounter(type, amount = 1, threshold = null) {
   return c;
 }
 
-function getCounters() { return readCounters(); }
+async function getCounters() { return await readCounters(); }
 
-function resetCounters() { writeCounters({ pending: 0, likes: 0, reviews: 0 }); return readCounters(); }
+async function resetCounters() { await writeCounters({ pending: 0, likes: 0, reviews: 0 }); return await readCounters(); }
 
 async function getStatus() {
-  const s = readStatus();
-  if (s.status === 'running' && s.pid) {
+  const s = await readStatus();
+  // Only check PID if it has been running for more than 30 seconds to avoid race conditions during start/stop
+  const runDuration = s.started_at ? (new Date() - new Date(s.started_at)) : 0;
+  
+  if (s.status === 'running' && s.pid && runDuration > 30000) {
     try {
       process.kill(s.pid, 0);
-      // process exists
       return s;
     } catch (e) {
-      // process not found; mark as failed
-      const finished_at = new Date().toISOString();
-      const msg = 'process_not_found';
-      const ns = { status: 'failed', pid: null, started_at: s.started_at || null, finished_at, msg, outLog: s.outLog, errLog: s.errLog };
-      writeStatus(ns);
-      return ns;
+      // If we are here, it means the process is gone but the status is still "running"
+      // Wait another 5 seconds to see if the authoritative exit handler handles it
+      await new Promise(r => setTimeout(r, 5000));
+      const doubleCheck = await readStatus();
+      if (doubleCheck.status === 'running') {
+        const finished_at = new Date();
+        const ns = { status: 'failed', pid: null, started_at: s.started_at || null, finished_at, msg: 'process_not_found', outLog: s.outLog, errLog: s.errLog };
+        await writeStatus(ns);
+        return ns;
+      }
+      return doubleCheck;
     }
   }
   return s;
@@ -322,112 +330,115 @@ async function cleanRecs(db) {
   if (removed > 0) fs.writeFileSync(RECS_FILE, JSON.stringify(obj, null, 2));
   return { cleaned: removed };
 }
-
 async function runInferInNode(outLog, errLog) {
-  // This implements the fast popularity-based per-user recompute without Python.
-  fs.writeFileSync(outLog, 'Starting runInferInNode...\n'); // DEBUG
-  const REVIEWS_FILE = path.join(__dirname, '..', 'data', 'filtered_smartphone_reviews.json');
-  const META_FILE = path.join(__dirname, '..', 'data', 'filtered_smartphone_metadata.json');
-  if (!fs.existsSync(REVIEWS_FILE)) throw new Error('Reviews file not found');
-  let reviewsRaw = fs.readFileSync(REVIEWS_FILE, 'utf8');
-  fs.appendFileSync(outLog, 'Reviews read...\n'); // DEBUG
-  let reviews = [];
-  try { reviews = JSON.parse(reviewsRaw); } catch (e) {
-    // try jsonlines
-    reviews = reviewsRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
-  }
-  fs.appendFileSync(outLog, `Parsed ${reviews.length} reviews...\n`); // DEBUG
-  // Build interactions
-  const interactions = [];
-  for (const r of reviews) {
-    if (!r.user_id || !r.asin) continue;
-    const rating = (r.overall || r.rating || 1.0);
-    interactions.push({ user_id: String(r.user_id), asin: String(r.asin), rating: Number(rating) });
-  }
-  fs.appendFileSync(outLog, `Built ${interactions.length} interactions from file...\n`); // DEBUG
-
-  // include likes from users in DB
-  // include likes from users in DB
-  const mongoose = require('mongoose');
-  if (mongoose.connection && mongoose.connection.readyState === 1) {
-      fs.appendFileSync(outLog, `Using existing Mongoose connection (state: ${mongoose.connection.readyState})...\n`);
-      console.log('[RetrainManager] Using existing DB connection for user likes...');
-      
-      try {
-          const db = mongoose.connection.db;
-          // Use a shorter timeout since we are already connected
-          const users = await Promise.race([
-             db.collection('users').find({}, { projection: { user_id: 1, likedProducts: 1 } }).toArray(),
-             new Promise((_, reject) => setTimeout(() => reject(new Error('MONGOOSE_QUERY_TIMEOUT')), 8000))
-          ]);
-          
-          fs.appendFileSync(outLog, `Found ${users.length} users in DB...\n`);
-          console.log(`[RetrainManager] Found ${users.length} users in DB.`);
-          for (const u of users) {
-              const uid = String(u.user_id);
-              for (const a of (u.likedProducts || [])) interactions.push({ user_id: uid, asin: String(a), rating: 4.0 });
-          }
-      } catch (dbErr) {
-          fs.appendFileSync(outLog, `DB Query failed: ${dbErr}\n`);
-          console.error(`[RetrainManager] DB Query failed: ${dbErr}`);
-      }
-  } else {
-      fs.appendFileSync(outLog, `Mongoose not connected (state: ${mongoose.connection ? mongoose.connection.readyState : 'null'}), skipping DB likes...\n`);
-      console.warn('[RetrainManager] Mongoose not connected, skipping DB likes.');
-  }
-  // compute popularity
-  const counts = {};
-  for (const it of interactions) counts[it.asin] = (counts[it.asin] || 0) + 1;
-  const popular = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([asin, c]) => asin);
-  fs.appendFileSync(outLog, `computed popularity...\n`); // DEBUG
-
-  // metadata
-  let meta = {};
   try {
-    if (fs.existsSync(META_FILE)) {
-      const md = JSON.parse(fs.readFileSync(META_FILE, 'utf8'));
-      for (const r of md) {
-        const key = String(r.parent_asin || r.asin);
-        meta[key] = {
-          title: r.title,
-          price: r.price,
-          category: r.main_category,
-          images: r.imageURLHighRes || r.images || []
-        };
-      }
+    console.log('\n🚀 [RECOSENSE ENGINE] Starting Lightweight Re-run...');
+    console.log('------------------------------------------------------');
+    
+    fs.writeFileSync(outLog, 'Starting runInferInNode...\n');
+    const REVIEWS_FILE = path.join(__dirname, '..', 'data', 'filtered_smartphone_reviews.json');
+    const META_FILE = path.join(__dirname, '..', 'data', 'filtered_smartphone_metadata.json');
+    if (!fs.existsSync(REVIEWS_FILE)) throw new Error('Reviews file not found');
+    
+    console.log('📊 Step 1/5: Reading Historical Dataset...');
+    let reviewsRaw = fs.readFileSync(REVIEWS_FILE, 'utf8');
+    let reviews = [];
+    try { reviews = JSON.parse(reviewsRaw); } catch (e) {
+      reviews = reviewsRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
     }
-  } catch (e) { /* ignore */ }
+    console.log(`✅ Loaded ${reviews.length.toLocaleString()} historical interactions.`);
+    // Build interactions
+    const interactions = [];
+    for (const r of reviews) {
+      if (!r.user_id || !r.asin) continue;
+      const rating = (r.overall || r.rating || 1.0);
+      interactions.push({ user_id: String(r.user_id), asin: String(r.asin), rating: Number(rating) });
+    }
 
-  // per-user recs
-  const userIds = Array.from(new Set(interactions.map(i => i.user_id)));
-  const N = 20;
-  fs.appendFileSync(outLog, `Saving recs for ${userIds.length} users to DB...\n`);
-  
-  for (const u of userIds) {
-    const seen = new Set(interactions.filter(i => i.user_id === u).map(i => i.asin));
-    const out = [];
-    let rank = 1;
-    for (const asin of popular) {
-      if (seen.has(asin)) continue;
-      const entry = { rank, asin, score: counts[asin] || 0 };
-      if (meta[asin]) Object.assign(entry, meta[asin]);
-      out.push(entry);
-      rank += 1;
-      if (rank > N) break;
+    console.log('💾 Step 2/5: Fetching Live Likes from MongoDB...');
+    const mongoose = require('mongoose');
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+        try {
+            const db = mongoose.connection.db;
+            const users = await Promise.race([
+               db.collection('users').find({}, { projection: { user_id: 1, likedProducts: 1 } }).toArray(),
+               new Promise((_, reject) => setTimeout(() => reject(new Error('MONGOOSE_QUERY_TIMEOUT')), 8000))
+            ]);
+            
+            let dbLikesCount = 0;
+            for (const u of users) {
+                const uid = String(u.user_id);
+                for (const a of (u.likedProducts || [])) {
+                    interactions.push({ user_id: uid, asin: String(a), rating: 4.0 });
+                    dbLikesCount++;
+                }
+            }
+            console.log(`✅ Injected ${dbLikesCount.toLocaleString()} live interactions from DB.`);
+        } catch (dbErr) {
+            console.error(`⚠️ DB Query failed, proceeding with file data only: ${dbErr}`);
+        }
+    } else {
+        console.warn('⚠️ Mongoose not connected, skipping DB injection.');
+    }
+    console.log('🧠 Step 3/5: Computing Global Popularity Scores...');
+    const counts = {};
+    for (const it of interactions) counts[it.asin] = (counts[it.asin] || 0) + 1;
+    const popular = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([asin, c]) => asin);
+    console.log(`✅ Ranked ${popular.length.toLocaleString()} products.`);
+
+    console.log('📖 Step 4/5: Loading Product Metadata...');
+    let meta = {};
+    try {
+      if (fs.existsSync(META_FILE)) {
+        const md = JSON.parse(fs.readFileSync(META_FILE, 'utf8'));
+        for (const r of md) {
+          const key = String(r.parent_asin || r.asin);
+          meta[key] = {
+            title: r.title,
+            price: r.price,
+            category: r.main_category,
+            images: r.imageURLHighRes || r.images || []
+          };
+        }
+        console.log(`✅ Metadata loaded for ${Object.keys(meta).length.toLocaleString()} products.`);
+      }
+    } catch (e) { console.warn('⚠️ Metadata load failed, results will be ASIN-only.'); }
+
+    const userIds = Array.from(new Set(interactions.map(i => i.user_id)));
+    const N = 20;
+
+    console.log(`🏁 Step 5/5: Syncing Rankings to MongoDB for ${userIds.length.toLocaleString()} users...`);
+    const startTime = Date.now();
+    
+    for (const u of userIds) {
+      const seen = new Set(interactions.filter(i => i.user_id === u).map(i => i.asin));
+      const out = [];
+      let rank = 1;
+      for (const asin of popular) {
+        if (seen.has(asin)) continue;
+        const entry = { rank, asin, score: counts[asin] || 0 };
+        if (meta[asin]) Object.assign(entry, meta[asin]);
+        out.push(entry);
+        rank += 1;
+        if (rank > N) break;
+      }
+      
+      await Recommendation.findOneAndUpdate(
+          { user_id: u },
+          { recommendations: out },
+          { upsert: true }
+      );
     }
     
-    // Save to DB
-    await Recommendation.findOneAndUpdate(
-        { user_id: u },
-        { recommendations: out },
-        { upsert: true }
-    );
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`✨ DONE! Re-run finished in ${duration}s.`);
+    console.log('------------------------------------------------------\n');
+    
+    try { fs.appendFileSync(outLog, `Node infer completed: Synced ${userIds.length} users to DB in ${duration}s\n`); } catch (e) {}
+  } catch (err) {
+    console.error('❌ [RECOSENSE ENGINE] CRITICAL ERROR:', err);
+    throw err;
   }
-  
-  // also write file for backward compatibility/debugging
-  // fs.writeFileSync(RECS_FILE, JSON.stringify(recs, null, 2), 'utf8');
-  
-  try { fs.appendFileSync(outLog, `Node infer completed: Synced ${userIds.length} users to DB\n`); } catch (e) {}
 }
 
 module.exports = { startRetrain, startModelRun, getStatus, cleanRecs, incrementCounter, getCounters, resetCounters };

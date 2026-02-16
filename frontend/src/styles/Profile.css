@@ -89,22 +89,33 @@
     gap: 1rem;
     padding: 1rem;
     color: var(--text-muted);
+    background: transparent;
+    border: 1px solid transparent;
     border-radius: var(--radius-md);
     transition: all 0.2s ease;
     text-decoration: none;
     font-weight: 500;
+    cursor: pointer;
+    width: 100%;
 }
 
 .profile-nav-link:hover {
-    background: var(--glass-hover);
+    background: rgba(255, 255, 255, 0.05);
     color: var(--text-main);
     transform: translateX(5px);
+    border-color: var(--border);
 }
 
 .profile-nav-link.active {
     background: rgba(139, 92, 246, 0.1);
     color: var(--primary);
     border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.profile-nav-link.logout-btn:hover {
+    background: rgba(239, 68, 68, 0.08);
+    color: var(--danger);
+    border-color: rgba(239, 68, 68, 0.2);
 }
 
 .profile-main-content {

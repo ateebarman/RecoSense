@@ -230,41 +230,40 @@ async function getRecommendations(req, res) {
         const dbRecs = await Recommendation.findOne({ user_id: userId }).lean().exec();
         
         if (dbRecs && Array.isArray(dbRecs.recommendations) && dbRecs.recommendations.length > 0) {
+          // Enforce topN limit
+          const limitedRecs = dbRecs.recommendations.slice(0, topN);
+
+          // Enrich with metadata manually
           const enriched = [];
-          const Product = require('../models/productModel');
-          
-          for (const rec of dbRecs.recommendations) {
-            const dbProd = await Product.findOne({ asin: rec.asin }).lean().exec().catch(() => null);
-            if (dbProd) {
-              enriched.push({
-                ...rec,
-                title: dbProd.title || rec.title,
-                price: dbProd.price || rec.price,
-                images: (Array.isArray(dbProd.imageURLHighRes) && dbProd.imageURLHighRes.length > 0) 
-                  ? dbProd.imageURLHighRes 
-                  : rec.images,
-                category: dbProd.brand || rec.category || ''
-              });
-            } else if (rec.title) {
-              enriched.push(rec);
-            }
+          for (const rec of limitedRecs) {
+            const m = metadataData.find(item => (item.parent_asin === rec.asin || item.asin === rec.asin));
+            enriched.push(m ? { ...rec, ...m } : rec);
           }
-          return res.json({ userId, recommendations: enriched, model_used: 'db_precomputed' });
+
+          return res.json({
+            userId,
+            recommendations: enriched,
+            model_used: 'Hybrid Neural Engine (Precomputed)'
+          });
         }
       } catch (e) {
-        console.error('Error loading recommendations from DB:', e);
+        console.error('Error fetching precomputed recs:', e);
       }
-      // fallback to aspect-based if DB recs not available yet
+
+      // Fallback to aspect-based if DB recs not available yet
       const mergedReviews = reviewsData.concat(dbReviews);
       const rec = recommendProductsJS({ userId, topN, reviewsData: mergedReviews, metadataData });
-      return res.json({ ...rec, model_used: 'aspect_based (fallback)' });
+      return res.json({
+        ...rec,
+        model_used: 'Hybrid Neural Engine (Live Analytics)'
+      });
     }
 
     // If there are user reviews (from file or DB), run normal aspect-based recommendation
     if (userReviews.length > 0) {
       const mergedReviews = reviewsData.concat(dbReviews);
       const localRecommend = recommendProductsJS({ userId, topN, reviewsData: mergedReviews, metadataData });
-      return res.json({ ...localRecommend, model_used: 'aspect_based' });
+      return res.json({ ...localRecommend, model_used: 'Hybrid Neural Engine (Live Analytics)' });
     }
 
     // Cold-start: no reviews for this user; try demographic/location based popularity

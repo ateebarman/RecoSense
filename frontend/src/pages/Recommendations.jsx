@@ -28,6 +28,14 @@ const Recommendations = () => {
     fetchRecs();
   }, []);
 
+  const getModelClass = (model) => {
+    if (!model) return "";
+    const m = model.toLowerCase();
+    if (m.includes("hybrid neural engine")) return "hybrid";
+    if (m.includes("demographic")) return "demographic";
+    return "";
+  };
+
   return (
     <div className="page-container">
       <header className="page-header">
@@ -46,9 +54,9 @@ const Recommendations = () => {
 
         <div className="header-actions">
           {data.model_used && (
-            <div className="model-chip">
+            <div className={`model-chip ${getModelClass(data.model_used)}`}>
               <Sparkles size={14} />
-              <span>Brain: {data.model_used}</span>
+              <span>Engine: {data.model_used}</span>
             </div>
           )}
           <button

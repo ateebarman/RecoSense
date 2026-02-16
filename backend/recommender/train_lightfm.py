@@ -134,41 +134,120 @@ def main():
                     'images': r.get('imageURLHighRes') or r.get('images') or []
                 }
 
-    # If --infer-only specified, or LightFM isn't available, generate popularity-based recommendations only
+    # --- ABSA FEATURE INJECTION RE-ENABLED (DEBUG) ---
+    absa_path = DATA_DIR / 'absa_reviews.json'
+    item_features = None
+    if absa_path.exists() and HAVE_LIGHTFM:
+        print('Loading ABSA scores for item features...')
+        try:
+            # Load ABSA data
+            absa_df = load_reviews(absa_path)
+            
+            # Find all _score columns
+            score_cols = [c for c in absa_df.columns if c.endswith('_score')]
+            
+            if score_cols:
+                # Group by ASIN and take mean sentiment for each aspect
+                item_absa = absa_df.groupby('asin')[score_cols].mean()
+                
+                # Align with our current item_ids
+                # We only take asins that exist in our main interactions
+                existing_item_ids = [it for it in item_ids if it in item_absa.index]
+                
+                if existing_item_ids:
+                    from scipy.sparse import csr_matrix
+                    
+                    # Create the feature matrix for items we have ABSA data for
+                    # For items without ABSA data, we use 0.0 (neutral)
+                    feature_data = item_absa.reindex(item_ids).fillna(0.0).to_numpy()
+                    item_features = csr_matrix(feature_data) 
+                    
+                    print(f'Integrated {len(score_cols)} ABSA aspects into {len(item_ids)} items.')
+        except Exception as e:
+            print(f'Soft-failed to load ABSA features: {e}. Proceeding with collaborative only.')
+    # --- ABSA FEATURE INJECTION END ---
+
+    # If --infer-only specified, or LightFM isn't available, generate high-quality personalized fallbacks
     if infer_only or not HAVE_LIGHTFM:
         if infer_only:
-            print('Infer-only mode: skipping training, generating popularity-based recommendations')
+            print('Infer-only mode: using ABSA similarity for recommendations')
         else:
-            print('LightFM not available; falling back to popularity-based per-user recommendations')
+            print('LightFM not available; using Content-Aware Sensitivity Fallback (ABSA Similarity)')
+        
+        # Calculate item similarity matrix based on ABSA scores
+        # This replaces the neural collaborative layer with a semantic content layer
         counts = interactions['asin'].value_counts()
-        popular_asins = counts.index.tolist()
+        
+        # 1. Get average ABSA features for the whole catalog
+        from sklearn.metrics.pairwise import cosine_similarity
+        
+        # We need the score columns indices again
+        absa_df = load_reviews(absa_path)
+        score_cols = [c for c in absa_df.columns if c.endswith('_score')]
+        catalog_features = absa_df.groupby('asin')[score_cols].mean().reindex(item_ids).fillna(0.0)
+        
         recs = {}
         n_rec = 20
+        
         for u in user_ids:
-            seen = set(interactions[interactions['user_id'] == u]['asin'].astype(str).tolist())
+            # Get user's liked ASINs
+            user_likes = interactions[interactions['user_id'] == u]['asin'].astype(str).tolist()
+            user_likes_set = set(user_likes)
+            
+            # If user has no likes, give them weighted popularity (Cold Start)
+            if not user_likes:
+                out = []
+                rank = 1
+                for asin in counts.index:
+                    if rank > n_rec: break
+                    entry = {'rank': rank, 'asin': asin, 'score': float(counts.get(asin, 0))}
+                    if asin in meta: entry.update(meta[asin])
+                    out.append(entry)
+                    rank += 1
+                recs[u] = out
+                continue
+
+            # 2. Personalized Content Recommendation: Calculate User's "Taste Profile"
+            # Get features of items the user actually liked
+            liked_features = catalog_features.loc[catalog_features.index.isin(user_likes)]
+            if liked_features.empty:
+                # Fallback to general popularity if their likes have no ABSA data
+                user_profile = np.zeros((1, len(score_cols)))
+            else:
+                user_profile = liked_features.mean().values.reshape(1, -1)
+            
+            # 3. Calculate similarity between User Profile and all Catalog Items
+            sim_scores = cosine_similarity(user_profile, catalog_features.values).flatten()
+            
+            # 4. Filter and Rank
+            # We want high similarity + a small boost for the item's general popularity
+            # Score = (Similarity * 10) + log1p(count)
+            rank_scores = []
+            for idx, asin in enumerate(item_ids):
+                if asin in user_likes_set: continue
+                s = (sim_scores[idx] * 10) + np.log1p(counts.get(asin, 0))
+                rank_scores.append((asin, s))
+            
+            rank_scores.sort(key=lambda x: x[1], reverse=True)
+            
             out = []
-            rank = 1
-            for asin in popular_asins:
-                if asin in seen:
-                    continue
-                entry = {'rank': rank, 'asin': asin, 'score': float(counts.get(asin, 0))}
-                if asin in meta:
-                    entry.update(meta[asin])
+            for rank, (asin, score) in enumerate(rank_scores[:n_rec], 1):
+                entry = {'rank': rank, 'asin': asin, 'score': float(score)}
+                if asin in meta: entry.update(meta[asin])
                 out.append(entry)
-                rank += 1
-                if rank > n_rec:
-                    break
             recs[u] = out
     else:
-        print('Training LightFM model...')
-        model = LightFM(loss='warp')
-        model.fit(mat, epochs=10, num_threads=4)
+        print('Training hybrid LightFM model...')
+        model = LightFM(loss='warp', no_components=30)
+        # Using num_threads=1 because Windows build lacks OpenMP
+        model.fit(mat, item_features=item_features, epochs=20, num_threads=1)
+        
         print('Generating recommendations...')
-        # collaborative model predictions
         recs = {}
         n_rec = 20
+        # For prediction, we must pass the same item_features
         for u, ui in user_map.items():
-            scores = model.predict(ui, np.arange(len(item_ids)))
+            scores = model.predict(ui, np.arange(len(item_ids)), item_features=item_features)
             # sort items by score, exclude those present in interactions
             seen = set(interactions[interactions['user_id'] == u]['asin'].astype(str).tolist())
             order = np.argsort(-scores)
@@ -186,7 +265,6 @@ def main():
                 if rank > n_rec:
                     break
             recs[u] = out
-    # recs already computed by model or fallback above
 
     print('Writing recommendations to', OUT_FILE)
     try:

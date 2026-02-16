@@ -107,7 +107,35 @@ npm run dev       # Start Vite dev server
 
 For deep technical dives into the model architecture, see:
 *   [Recommendation System Guide](./RECOMMENDATION_SYSTEM.md)
+*   [Quick Re-run Engine (Level 1)](./QUICK_RE_RUN.md)
+*   [LightFM Heavy Retrain (Level 2)](./LIGHTFM_RETRAIN.md)
 *   [Deployment Guide](./DEPLOY.md)
+
+---
+
+## 🛠️ Manual Engine Triggers (CLI)
+
+If you need to run the engine manually without using the Admin Panel:
+
+### 1. Quick Re-run (Node.js)
+Triggers the lightweight heuristic re-computation:
+```bash
+# From the backend directory
+node -e "require('./recommender/retrainManager').startModelRun()"
+```
+
+### 2. Heavy Retrain (Python LightFM)
+Triggers the full matrix factorization training:
+```bash
+# From the backend directory
+node -e "require('./recommender/retrainManager').startRetrain()"
+```
+
+### 3. Check Engine Status
+```bash
+# From the backend directory
+node -e "require('./recommender/retrainManager').getStatus().then(s => console.log(s))"
+```
 
 ---
 

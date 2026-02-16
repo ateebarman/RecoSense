@@ -210,13 +210,14 @@ const Landing = () => {
             <section className="cta-banner-section">
                 <motion.div
                     className="cta-banner-card"
-                    initial={{ opacity: 0, y: 40 }}
-                    whileInView={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.8, ease: "easeOut" }}
                     viewport={{ once: true }}
                 >
                     <h2>Ready to Find Your <br />Next Favorite Device?</h2>
                     <p>Join the thousands of users finding their perfect smartphone match through predictive discovery.</p>
-                    <Link to="/register" className="btn-white shadow-lg">
+                    <Link to="/register" className="btn-cta-premium shadow-glow">
                         Get Started Free <ArrowRight size={20} />
                     </Link>
                 </motion.div>
