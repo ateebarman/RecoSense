@@ -2,33 +2,30 @@
 
 ### *Find Exactly What You'll Love Tomorrow*
 
-RecoSense is a premium, full-stack e-commerce marketplace powered by an advanced hybrid analytical engine. It transforms traditional shopping into an intelligent discovery journey using **RoBERTa-based sentiment analysis** and **LightFM hybrid filtering** models.
+RecoSense is a premium, full-stack e-commerce marketplace powered by an advanced hybrid analytical engine. It transforms traditional shopping into an intelligent discovery journey using **RoBERTa-based sentiment analysis**, **LightFM hybrid filtering**, and a high-performance **Groq-powered AI Consultant**.
 
 ---
 
 ## 🌟 Key Features
 
-### 🧠 Analytical Discovery (Smart Picks)
+### 🧠 Intelligence & Analytical Discovery
+*   **AI Consultant (Groq API):** A specialized LLM-powered consultant (Llama 3 family via Groq) that provides real-time, context-aware technical advice, product comparisons, and personalized discovery paths.
 *   **Hybrid Recommendation Engine:** Leverages **LightFM** to combine collaborative filtering with content-based metadata for high-precision suggestions.
 *   **Sentiment Awareness:** Integrates **RoBERTa (Robustly Optimized BERT Pretraining Approach)** to analyze review semantics and extract deep qualitative insights.
 *   **Smart Cold-Start:** New users receive high-accuracy suggestions based on demographic profiling (age group and gender).
-*   **Counter-Based Auto-Triggering:** Analytical models automatically recompute recommendations in the background as user interactions accumulate.
+*   **Auto-Triggered Re-training:** Analytical models automatically recompute recommendations as user interactions accumulate, ensuring a perpetually fresh discovery feed.
 
 ### 🎨 Premium User Experience
-*   **Cinematic Landing Page:** A high-impact, professional entrance featuring motion-driven storytelling and deep-learning insights.
-*   **Fluid Animations:** Powered by `framer-motion` for a smooth, high-end feel throughout the application.
-*   **Glassmorphism UI:** Modern dark-theme aesthetic with vibrant accents and frosted-glass navigation.
+*   **Cinematic Design System:** Modern dark-theme aesthetic featuring glassmorphism, fluid animations (Framer Motion), and a high-impact discovery-driven landing page.
+*   **Symmetrical UI:** Optimized Product Detail layouts with perfect visual alignment between imagery and technical specifications.
+*   **Fluid Navigation:** Enhanced UX with automatic **Scroll-to-Top** behavior on route changes and a consistent, globally-integrated footer.
+*   **Optimized Performance:** Implemented **bulk-fetch API endpoints** and a **Synchronized Global State** (UserContext) to ensure zero-latency UI updates and preference persistence.
 
 ### 🛒 Core Marketplace Features
-*   **Unified Product Catalog:** Browse thousands of devices with high-detail cards and instant action buttons.
-*   **Real-time Wishlist:** Save items you love and track them in a dedicated favorites dashboard.
-*   **Activity Feed:** View and manage your product reviews, enriched by sentiment-aware processing.
-*   **Secure Authentication:** JWT-based secure login and registration with demographic profiling.
-
-### ⚙️ Engine Control Center
-*   **Model Monitoring:** Track interaction counters and model run statuses in real-time.
-*   **Manual Overrides:** Admins can manually trigger model recomputations or clean recommendation sets.
-*   **Detailed Analytics:** System-level logs for both Node.js and Python-based execution paths.
+*   **Unified Product Catalog:** Browse thousands of electronics with high-detail cards and instant save-to-wishlist functionality.
+*   **Smart Wishlist Dash:** A centralized hub to track your favorited tech, synced in real-time across all devices.
+*   **Activity & Reviews:** Manage your community-contributed reviews, processed via sentiment-aware backend pipelines.
+*   **Identity Management:** Secure JWT-based authentication with role-based access for an administrative inventory dashboard.
 
 ---
 
@@ -36,11 +33,11 @@ RecoSense is a premium, full-stack e-commerce marketplace powered by an advanced
 
 | Layer | Technologies |
 |---|---|
-| **Frontend** | React, `framer-motion`, `lucide-react`, Axios, React Router |
+| **AI / ML** | **Groq API** (Llama 3), **LightFM** (Hybrid Filtering), **RoBERTa** (Transformers) |
+| **Frontend** | React, `framer-motion`, `lucide-react`, React Router, Axios |
 | **Backend** | Node.js, Express, MongoDB (Mongoose) |
-| **Analytical Engine** | **LightFM** (Hybrid Filtering), **RoBERTa** (Transformers for Sentiment) |
 | **Styling** | Vanilla CSS (Modern Design System with Global Tokens) |
-| **State** | React Context (User & Cart Management) |
+| **State** | React Context (Synchronized Global Wishlist & User State) |
 
 ---
 
@@ -51,12 +48,14 @@ graph TD
     A[Frontend: React + Framer Motion] --> B[Express API]
     B --> C[(MongoDB: Users, Products, Reviews)]
     B --> D[RetrainManager]
+    B --> I[Groq AI Controller]
     D --> E{Interactions >= Threshold?}
     E -- Yes --> F[Inference Module: RoBERTa + LightFM]
     F --> G[lightfm_recs.json]
     B -- GET /recommendations --> H[RecommendationController]
     H -- Priority Logic --> G
     H -- Fallback --> C
+    I -- Streaming / Chat --> J[AI Consultant UI]
 ```
 
 ---
@@ -67,10 +66,11 @@ graph TD
 *   **Node.js** (v18+)
 *   **MongoDB** (Local instance or Atlas)
 *   **Python 3.8+** (For LightFM/RoBERTa modules)
+*   **Groq API Key** (For the AI Consultant feature)
 
 ### 1. Clone & Install
 ```bash
-git clone https://github.com/your-username/RecoSense.git
+git clone https://github.com/ateebarman/RecoSense.git
 cd RecoSense
 
 # Install Backend
@@ -85,9 +85,10 @@ npm install
 ### 2. Configure Environment
 Create a `.env` file in the `backend/` directory:
 ```env
-MONGO_URI=mongodb://localhost:27017/recom-db
+MONGO_URI=your_mongodb_uri
 PORT=5001
 JWT_SECRET=your_super_secret_key
+GROQ_API_KEY=your_groq_api_key
 MODEL_RUN_THRESHOLD=10
 ```
 
@@ -95,7 +96,7 @@ MODEL_RUN_THRESHOLD=10
 ```bash
 # In backend directory
 npm run seed      # Initialize test data
-npm start         # Start API server
+npm run dev       # Start API server
 
 # In frontend directory
 npm run dev       # Start Vite dev server
@@ -118,25 +119,15 @@ For deep technical dives into the model architecture, see:
 If you need to run the engine manually without using the Admin Panel:
 
 ### 1. Quick Re-run (Node.js)
-Triggers the lightweight heuristic re-computation:
 ```bash
-# From the backend directory
 node -e "require('./recommender/retrainManager').startModelRun()"
 ```
 
 ### 2. Heavy Retrain (Python LightFM)
-Triggers the full matrix factorization training:
 ```bash
-# From the backend directory
 node -e "require('./recommender/retrainManager').startRetrain()"
-```
-
-### 3. Check Engine Status
-```bash
-# From the backend directory
-node -e "require('./recommender/retrainManager').getStatus().then(s => console.log(s))"
 ```
 
 ---
 
-Generated by **RecoSense Engineering**. Empowering the future of personalized commerce. ✨
+Generated by **RecoSense Engineering**. Empowering the future of personalized tech discovery. ✨
