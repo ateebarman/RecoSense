@@ -2,6 +2,8 @@ import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useUser, useIsAdmin } from "./context/UserContext";
 import Navbar from "./components/Navbar";
+import Footer from "./components/Footer";
+import ScrollToTop from "./components/ScrollToTop";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Home from "./pages/Home";
@@ -22,6 +24,7 @@ function App() {
   const isAdmin = useIsAdmin();
   return (
     <>
+      <ScrollToTop />
       <Navbar />
       <div className="page-container-main">
         <Routes>
@@ -87,6 +90,7 @@ function App() {
           />
         </Routes>
       </div>
+      <Footer />
     </>
   );
 }

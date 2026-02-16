@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
-import { ShoppingCart, Heart, Zap, Camera, Smartphone, DollarSign, Cpu, ShieldCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ShoppingCart, Heart, Zap, Camera, Smartphone, DollarSign, Cpu, ShieldCheck, Sparkles } from 'lucide-react';
 
 const ProductCard = ({ product, isLiked, onLike }) => {
     const { addItemToCart } = useCart();
+    const navigate = useNavigate();
     const [isAddingToCart, setIsAddingToCart] = useState(false);
 
     const defaultImage = 'https://placehold.co/400x500/1e1e1e/white?text=No+Image';
@@ -21,6 +23,12 @@ const ProductCard = ({ product, isLiked, onLike }) => {
         } finally {
             setIsAddingToCart(false);
         }
+    };
+
+    const handleOpenAI = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        navigate(`/product/${encodeURIComponent(product.asin)}?chat=true`);
     };
 
     const getAspectIcon = (aspect) => {
@@ -52,6 +60,13 @@ const ProductCard = ({ product, isLiked, onLike }) => {
                     <div className="product-footer">
                         <p className="price">{product.price || 'N/A'}</p>
                         <div className="product-card-actions">
+                            <button
+                                className="ai-quick-btn"
+                                onClick={handleOpenAI}
+                                title="Ask RecoSense AI"
+                            >
+                                <Sparkles size={16} />
+                            </button>
                             <button
                                 className={`like-btn ${isLiked ? 'liked' : ''}`}
                                 onClick={(e) => {

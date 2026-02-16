@@ -18,12 +18,13 @@ import {
 } from "lucide-react";
 
 const Navbar = () => {
-  const { user_id, userName, logout } = useUser();
+  const { user_id, userName, logout, likedProducts } = useUser();
   const isAdmin = useIsAdmin();
   const { getCartCount } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
   const cartCount = getCartCount();
+  const wishlistCount = likedProducts?.size || 0;
   const [isOpen, setIsOpen] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [dropdownTimeout, setDropdownTimeout] = useState(null);
@@ -78,7 +79,7 @@ const Navbar = () => {
             <NavLink
               key={link.to}
               to={link.to}
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''} ${link.label === "Wishlist" ? "cart-item" : ""}`}
             >
               {link.icon}
               <span>{link.label}</span>

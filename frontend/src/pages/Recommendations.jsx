@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getRecommendations } from "../services/api";
+import { getRecommendations, toggleLike } from "../services/api";
 import { useUser } from "../context/UserContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, BrainCircuit, RefreshCw, AlertCircle } from "lucide-react";
@@ -9,7 +9,7 @@ const Recommendations = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [data, setData] = useState({ userId: "", recommendations: [] });
-  const { user_id } = useUser();
+  const { user_id, likedProducts, toggleLikeProductLocally } = useUser();
 
   const fetchRecs = async () => {
     try {
@@ -27,6 +27,16 @@ const Recommendations = () => {
   useEffect(() => {
     fetchRecs();
   }, []);
+
+  const handleLike = async (asin) => {
+    try {
+      toggleLikeProductLocally(asin);
+      await toggleLike(user_id, asin);
+    } catch (error) {
+      console.error("Failed to update like status:", error);
+      toggleLikeProductLocally(asin); // Revert
+    }
+  };
 
   const getModelClass = (model) => {
     if (!model) return "";
@@ -117,7 +127,11 @@ const Recommendations = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                 >
-                  <ProductCard product={product} isLiked={false} onLike={() => { }} />
+                  <ProductCard
+                    product={product}
+                    isLiked={likedProducts.has(product.asin)}
+                    onLike={handleLike}
+                  />
                 </motion.div>
               );
             })}

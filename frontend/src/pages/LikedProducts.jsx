@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useUser } from '../context/UserContext';
-import { getUser, getProducts, toggleLike } from '../services/api';
+import { getUser, getProductsByAsins, toggleLike } from '../services/api';
 import ProductCard from '../components/ProductCard';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, ShoppingBag, Sparkles } from 'lucide-react';
@@ -9,24 +9,22 @@ import { Link } from 'react-router-dom';
 const LikedProducts = () => {
     const [liked, setLiked] = useState([]);
     const [loading, setLoading] = useState(true);
-    const { user_id } = useUser();
+    const { user_id, toggleLikeProductLocally } = useUser();
 
     const fetchLikedProducts = async () => {
         try {
             setLoading(true);
             const userRes = await getUser(user_id);
-            const likedAsins = new Set(userRes.data.likedProducts || []);
+            const likedAsins = userRes.data.likedProducts || [];
 
-            if (likedAsins.size === 0) {
+            if (likedAsins.length === 0) {
                 setLiked([]);
                 return;
             }
 
-            // In a production app, we'd have an endpoint to fetch specific products by ASINs
-            // For now, we fetch the catalogue and filter (as per original logic)
-            const productsRes = await getProducts({ size: 200 });
-            const filteredProducts = (productsRes.data || []).filter(p => likedAsins.has(p.asin));
-            setLiked(filteredProducts);
+            // Fetch specific products by ASINs for precision
+            const productsRes = await getProductsByAsins(likedAsins);
+            setLiked(productsRes.data || []);
         } catch (error) {
             console.error("Failed to fetch liked products:", error);
         } finally {
@@ -40,10 +38,12 @@ const LikedProducts = () => {
 
     const handleUnlike = async (asin) => {
         try {
+            toggleLikeProductLocally(asin);
             await toggleLike(user_id, asin);
             setLiked(prev => prev.filter(p => p.asin !== asin));
         } catch (error) {
             console.error("Failed to unlike product:", error);
+            toggleLikeProductLocally(asin); // Revert
         }
     };
 

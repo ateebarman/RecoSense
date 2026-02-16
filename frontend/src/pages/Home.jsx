@@ -10,11 +10,10 @@ const Home = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const pageSize = 12;
-    const [likedProducts, setLikedProducts] = useState(new Set());
     const [sortBy, setSortBy] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    const { user_id, userName } = useUser();
+    const { user_id, userName, likedProducts, toggleLikeProductLocally } = useUser();
 
     // Debounce search input
     useEffect(() => {
@@ -42,17 +41,12 @@ const Home = () => {
 
             const productsRes = await getProducts(params);
             setProducts(productsRes.data || []);
-
-            if (user_id) {
-                const userRes = await getUser(user_id);
-                setLikedProducts(new Set(userRes.data.likedProducts || []));
-            }
         } catch (error) {
             console.error("Failed to fetch data:", error);
         } finally {
             setLoading(false);
         }
-    }, [user_id, sortBy, debouncedSearch]);
+    }, [sortBy, debouncedSearch]); // Removed user_id dependency since we use global state
 
     useEffect(() => {
         fetchData();
@@ -64,18 +58,11 @@ const Home = () => {
 
     const handleLike = async (asin) => {
         try {
+            toggleLikeProductLocally(asin);
             await toggleLike(user_id, asin);
-            setLikedProducts(prevLiked => {
-                const newLiked = new Set(prevLiked);
-                if (newLiked.has(asin)) {
-                    newLiked.delete(asin);
-                } else {
-                    newLiked.add(asin);
-                }
-                return newLiked;
-            });
         } catch (error) {
             console.error("Failed to update like status:", error);
+            toggleLikeProductLocally(asin); // Revert
         }
     };
 

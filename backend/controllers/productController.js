@@ -241,3 +241,18 @@ exports.getProductByAsin = async (req, res) => {
         res.status(500).json({ message: 'Server Error' });
     }
 };
+
+exports.getProductsByAsins = async (req, res) => {
+    try {
+        const { asins } = req.body;
+        if (!asins || !Array.isArray(asins)) {
+            return res.status(400).json({ message: 'Invalid ASINs' });
+        }
+        const products = await Product.find({ asin: { $in: asins } }).lean();
+        const enriched = await injectXAI(products);
+        res.json(enriched);
+    } catch (error) {
+        console.error('getProductsByAsins Error:', error);
+        res.status(500).json({ message: 'Server Error' });
+    }
+};

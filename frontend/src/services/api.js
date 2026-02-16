@@ -15,6 +15,7 @@ api.interceptors.request.use((config) => {
 
 export const getProducts = (opts = {}) => api.get("/products", { params: opts });
 export const getProductByAsin = (asin) => api.get(`/products/${asin}`);
+export const getProductsByAsins = (asins) => api.post("/products/bulk-fetch", { asins });
 export const getUser = (reviewerID) => api.get(`/user/${reviewerID}`);
 export const registerUser = (data) => api.post('/user/register', data);
 export const loginUser = (user_id, password) => api.post('/user/login', { user_id, password });
@@ -69,5 +70,9 @@ export const reRunModel = (user_id) =>
   api.post('/admin/run-model', {}, { headers: { 'x-user-id': user_id } });
 export const triggerManualRetrain = (user_id) =>
   api.post('/admin/retrain', {}, { headers: { 'x-user-id': user_id } });
+
+// AI APIs
+export const getAIAnalysis = (asin) => api.get(`/ai/analyze/${asin}`);
+export const askAIQuestion = (data) => api.post('/ai/ask', data);
 
 export default api;
