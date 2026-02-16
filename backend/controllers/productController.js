@@ -68,6 +68,22 @@ exports.getProductByAsin = async (req, res) => {
             }
         }
 
+        // If not found in metadata.jsonl, try filtered_smartphone_metadata.json
+        if (!found) {
+            const filteredPath = path.join(__dirname, '..', 'data', 'filtered_smartphone_metadata.json');
+            if (fs.existsSync(filteredPath)) {
+                try {
+                    const filteredRaw = fs.readFileSync(filteredPath, 'utf-8');
+                    const filteredData = JSON.parse(filteredRaw);
+                    if (Array.isArray(filteredData)) {
+                        found = filteredData.find(p => p.asin === asin);
+                    }
+                } catch (e) {
+                    console.error('Error reading filtered metadata:', e);
+                }
+            }
+        }
+
         if (!found) return res.status(404).json({ message: 'Product not found' });
 
         // map metadata record to product-like response
@@ -77,7 +93,9 @@ exports.getProductByAsin = async (req, res) => {
             description: Array.isArray(found.description) ? found.description : (found.description ? [found.description] : []),
             price: found.price ? String(found.price) : null,
             brand: found.brand || '',
-            imageURLHighRes: Array.isArray(found.images) ? found.images.map(img => img.large || img.thumb || img) : [],
+            imageURLHighRes: (Array.isArray(found.images) && found.images.length > 0)
+                ? found.images.map(img => img.large || img.thumb || img)
+                : (Array.isArray(found.imageURLHighRes) ? found.imageURLHighRes : []),
             categories: found.main_category ? [[found.main_category]] : [],
         };
         return res.json(mapped);

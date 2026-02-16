@@ -8,7 +8,7 @@ const AdminPanel = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isRetraining, setIsRetraining] = useState(false);
+  const [processingAction, setProcessingAction] = useState(null); // 'rerun' | 'retrain' | null
   const [message, setMessage] = useState('');
   const [jobStatus, setJobStatus] = useState(null);
 
@@ -42,7 +42,7 @@ const AdminPanel = () => {
 
     if (window.confirm(confirmMsg)) {
       try {
-        setIsRetraining(true);
+        setProcessingAction(type);
         setMessage(isRerun ? 'Re-run started...' : 'Retraining started...');
 
         const res = isRerun ? await reRunModel(user_id) : await triggerManualRetrain(user_id);
@@ -54,14 +54,14 @@ const AdminPanel = () => {
           setJobStatus(data);
           if (data.status === 'idle' || data.status === 'success' || data.status === 'done' || data.error) {
             clearInterval(interval);
-            setIsRetraining(false);
+            setProcessingAction(null);
             const updatedStats = await getAdminStats(user_id);
             setStats(updatedStats.data);
           }
         }, 3000);
       } catch (err) {
         setMessage(`Action failed: ${err.message}`);
-        setIsRetraining(false);
+        setProcessingAction(null);
       }
     }
   };
@@ -125,9 +125,9 @@ const AdminPanel = () => {
               <button
                 className="btn-secondary"
                 onClick={() => handleAction('rerun')}
-                disabled={isRetraining}
+                disabled={!!processingAction}
               >
-                {isRetraining ? 'Processing...' : 'Re-run Model'}
+                {processingAction === 'rerun' ? 'Processing...' : 'Re-run Model'}
               </button>
             </div>
 
@@ -141,13 +141,13 @@ const AdminPanel = () => {
               <button
                 className="btn-primary"
                 onClick={() => handleAction('retrain')}
-                disabled={isRetraining}
+                disabled={!!processingAction}
               >
-                {isRetraining ? 'Training...' : 'Run Full Retrain'}
+                {processingAction === 'retrain' ? 'Training...' : 'Run Full Retrain'}
               </button>
             </div>
 
-            {message && <div className={`status-bubble ${isRetraining ? 'info' : 'success'}`}>{message}</div>}
+            {message && <div className={`status-bubble ${processingAction ? 'info' : 'success'}`}>{message}</div>}
 
             <div className="job-status-panel">
               <h4>Engine Status</h4>

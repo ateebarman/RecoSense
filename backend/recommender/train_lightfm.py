@@ -131,7 +131,7 @@ def main():
                     'title': r.get('title'),
                     'price': r.get('price'),
                     'category': r.get('main_category'),
-                    'images': r.get('images', [])
+                    'images': r.get('imageURLHighRes') or r.get('images') or []
                 }
 
     # If --infer-only specified, or LightFM isn't available, generate popularity-based recommendations only

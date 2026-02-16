@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { getRecommendations } from "../services/api";
 import { useUser } from "../context/UserContext";
-import { Link } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { Sparkles, BrainCircuit, RefreshCw, AlertCircle } from "lucide-react";
 import ProductCard from "../components/ProductCard";
 
 const Recommendations = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [data, setData] = useState({ userId: "", recommendations: [] });
+  const { user_id } = useUser();
 
   const fetchRecs = async () => {
     try {
@@ -16,39 +18,76 @@ const Recommendations = () => {
       const res = await getRecommendations(30, user_id);
       setData(res.data);
     } catch (e) {
-      setError("Failed to load recommendations");
+      setError("Failed to load your personalized recommendations.");
     } finally {
       setLoading(false);
     }
   };
-
-  const { user_id } = useUser();
 
   useEffect(() => {
     fetchRecs();
   }, []);
 
   return (
-    <div className="container">
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <h2>Top Recommendations</h2>
-        {/* <button onClick={fetchRecs}>Refresh (random user)</button> */}
-      </div>
-      {loading && <p>Loading...</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
-      {!loading && !error && (
-        <>
-          {data.model_used && <p style={{ color: 'green' }}>Model: {data.model_used}</p>}
-          {data.message && <p style={{ color: 'gray' }}>{data.message}</p>}
-          <div className="product-grid">
-            {data.recommendations.map((rec) => {
-              // Handle different image formats (flat strings or large/thumb objects)
+    <div className="page-container">
+      <header className="page-header">
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="header-content"
+        >
+          <div className="welcome-badge">
+            <BrainCircuit size={14} />
+            <span>Hybrid Analytical Discovery</span>
+          </div>
+          <h1>Matched For <span className="gradient-text">You</span></h1>
+          <p>Our RoBERTa & LightFM models analyzed your behavior to find these gems.</p>
+        </motion.div>
+
+        <div className="header-actions">
+          {data.model_used && (
+            <div className="model-chip">
+              <Sparkles size={14} />
+              <span>Brain: {data.model_used}</span>
+            </div>
+          )}
+          <button
+            className="btn-secondary"
+            onClick={fetchRecs}
+            disabled={loading}
+          >
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+            Re-calculate
+          </button>
+        </div>
+      </header>
+
+      <AnimatePresence mode="wait">
+        {loading ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="loading-shimmer-grid"
+          >
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="shimmer-card"></div>
+            ))}
+          </motion.div>
+        ) : error ? (
+          <div className="empty-state error">
+            <AlertCircle size={48} className="text-danger" />
+            <h3>Oops! Something went wrong</h3>
+            <p>{error}</p>
+            <button className="btn-primary" onClick={fetchRecs}>Try Again</button>
+          </div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="product-grid"
+          >
+            {data.recommendations.map((rec, index) => {
               const images = Array.isArray(rec.images) ? rec.images : [];
               const refinedImages = images.map(img => {
                 if (typeof img === 'string') return img;
@@ -62,12 +101,26 @@ const Recommendations = () => {
                 brand: rec.category || rec.brand || '',
                 imageURLHighRes: refinedImages
               };
+
               return (
-                <ProductCard key={rec.asin} product={product} isLiked={false} onLike={() => { }} />
+                <motion.div
+                  key={rec.asin}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  <ProductCard product={product} isLiked={false} onLike={() => { }} />
+                </motion.div>
               );
             })}
-          </div>
-        </>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {data.message && !loading && (
+        <div className="footer-note">
+          <Sparkles size={12} /> {data.message}
+        </div>
       )}
     </div>
   );

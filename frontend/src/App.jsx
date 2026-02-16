@@ -5,6 +5,7 @@ import Navbar from "./components/Navbar";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Home from "./pages/Home";
+import Landing from "./pages/Landing";
 import LikedProducts from "./pages/LikedProducts";
 import MyReviews from "./pages/MyReviews";
 import ProductDetail from "./pages/ProductDetail";
@@ -14,25 +15,34 @@ import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import Orders from "./pages/Orders";
 import ChangePassword from "./pages/ChangePassword";
+import Profile from "./pages/Profile";
 
 function App() {
   const { user_id } = useUser();
   const isAdmin = useIsAdmin();
   return (
     <>
-      {user_id && <Navbar />}
-      <div className="page-container">
+      <Navbar />
+      <div className="page-container-main">
         <Routes>
           <Route
+            path="/"
+            element={<Landing />}
+          />
+          <Route
+            path="/profile"
+            element={user_id ? <Profile /> : <Navigate to="/login" />}
+          />
+          <Route
             path="/login"
-            element={!user_id ? <Login /> : <Navigate to="/" />}
+            element={!user_id ? <Login /> : <Navigate to="/shop" />}
           />
           <Route
             path="/register"
-            element={!user_id ? <Register /> : <Navigate to="/" />}
+            element={!user_id ? <Register /> : <Navigate to="/shop" />}
           />
           <Route
-            path="/"
+            path="/shop"
             element={user_id ? <Home /> : <Navigate to="/login" />}
           />
           <Route
@@ -49,7 +59,7 @@ function App() {
           />
           <Route
             path="/admin"
-            element={user_id && isAdmin ? <AdminPanel /> : <Navigate to={user_id ? "/" : "/login"} />}
+            element={user_id && isAdmin ? <AdminPanel /> : <Navigate to={user_id ? "/shop" : "/login"} />}
           />
           <Route
             path="/product/:asin"
@@ -73,7 +83,7 @@ function App() {
           />
           <Route
             path="*"
-            element={<Navigate to={user_id ? "/" : "/login"} />}
+            element={<Navigate to={user_id ? "/shop" : "/"} />}
           />
         </Routes>
       </div>

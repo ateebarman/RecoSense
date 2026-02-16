@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { ShoppingCart, Heart } from 'lucide-react';
 
 const ProductCard = ({ product, isLiked, onLike }) => {
     const { addItemToCart } = useCart();
@@ -15,41 +16,45 @@ const ProductCard = ({ product, isLiked, onLike }) => {
         try {
             setIsAddingToCart(true);
             await addItemToCart(product.asin, product, 1);
-            alert('Item added to cart!');
         } catch (error) {
-            alert('Failed to add item to cart');
+            console.error('Failed to add item to cart', error);
         } finally {
             setIsAddingToCart(false);
         }
     };
 
     return (
-        <Link to={`/product/${encodeURIComponent(product.asin)}`} className="product-card-link">
+        <Link to={`/product/${encodeURIComponent(product.asin)}`} className="product-card-wrapper">
             <div className="product-card">
-                <img src={imageUrl} alt={product.title} loading="lazy" />
-                <h3>{product.title || 'No Title'}</h3>
-                <p>{product.brand || 'No Brand'}</p>
-                <p className="price">{product.price || 'N/A'}</p>
-                <div className="product-card-actions">
-                    <button
-                        className={`like-button ${isLiked ? 'liked' : ''}`}
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            onLike(product.asin);
-                        }}
-                        aria-pressed={isLiked}
-                        aria-label={isLiked ? 'Unlike product' : 'Like product'}
-                    >
-                        &#x2764;
-                    </button>
-                    <button
-                        className="add-to-cart-btn"
-                        onClick={handleAddToCart}
-                        disabled={isAddingToCart}
-                    >
-                        {isAddingToCart ? '...' : '🛒 Add'}
-                    </button>
+                <div className="product-image-container">
+                    <img src={imageUrl} alt={product.title} loading="lazy" />
+                </div>
+                <div className="product-details">
+                    <span className="category">{product.brand || 'Premium Device'}</span>
+                    <h3>{product.title || 'No Title'}</h3>
+                    <div className="product-footer">
+                        <p className="price">{product.price || 'N/A'}</p>
+                        <div className="product-card-actions">
+                            <button
+                                className={`like-btn ${isLiked ? 'liked' : ''}`}
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    onLike(product.asin);
+                                }}
+                                aria-label={isLiked ? 'Unlike' : 'Like'}
+                            >
+                                <Heart size={18} fill={isLiked ? "currentColor" : "none"} />
+                            </button>
+                            <button
+                                className="add-cart-btn"
+                                onClick={handleAddToCart}
+                                disabled={isAddingToCart}
+                            >
+                                <ShoppingCart size={18} />
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </Link>

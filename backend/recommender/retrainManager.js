@@ -90,14 +90,21 @@ async function startRetrain() {
 
   // update status immediately and return (fire-and-forget)
   writeStatus({ status: 'running', pid: py.pid, started_at: new Date().toISOString(), outLog, errLog });
+  console.log(`[RetrainManager] Started Python retrain process (PID: ${py.pid})`);
+  console.log(`[RetrainManager] Logs writing to: ${outLog}`);
+
+  py.stdout.on('data', (data) => console.log(`[Retrain-Py-Out]: ${data.toString().trim()}`));
+  py.stderr.on('data', (data) => console.error(`[Retrain-Py-Err]: ${data.toString().trim()}`));
 
   py.on('exit', (code) => {
+    console.log(`[RetrainManager] Python process exited with code ${code}`);
     const finished_at = new Date().toISOString();
     const status = code === 0 ? 'success' : 'failed';
     const msg = `exit:${code}`;
     writeStatus({ status, pid: null, started_at: readStatus().started_at || null, finished_at, msg, outLog, errLog });
   });
   py.on('error', (err) => {
+    console.error(`[RetrainManager] Python process error:`, err);
     const finished_at = new Date().toISOString();
     writeStatus({ status: 'failed', pid: null, started_at: readStatus().started_at || null, finished_at, msg: String(err), outLog, errLog });
   });
@@ -117,7 +124,9 @@ async function startModelRun() {
   // Prefer a fast Node.js-based infer-only recompute (no heavy Python dependency)
   try {
     writeStatus({ status: 'running', pid: null, started_at: new Date().toISOString(), outLog, errLog, mode: 'infer' });
+    console.log('[RetrainManager] Starting Quick Re-run (Node.js mode)...');
     await runInferInNode(outLog, errLog);
+    console.log('[RetrainManager] Quick Re-run completed successfully.');
     writeStatus({ status: 'success', pid: null, started_at: readStatus().started_at || null, finished_at: new Date().toISOString(), msg: 'ok', outLog, errLog, mode: 'infer' });
     writeCounters({ pending: 0, likes: 0, reviews: 0 });
     return { started: true };
@@ -223,15 +232,18 @@ async function cleanRecs(db) {
 
 async function runInferInNode(outLog, errLog) {
   // This implements the fast popularity-based per-user recompute without Python.
+  fs.writeFileSync(outLog, 'Starting runInferInNode...\n'); // DEBUG
   const REVIEWS_FILE = path.join(__dirname, '..', 'data', 'filtered_smartphone_reviews.json');
   const META_FILE = path.join(__dirname, '..', 'data', 'filtered_smartphone_metadata.json');
   if (!fs.existsSync(REVIEWS_FILE)) throw new Error('Reviews file not found');
   let reviewsRaw = fs.readFileSync(REVIEWS_FILE, 'utf8');
+  fs.appendFileSync(outLog, 'Reviews read...\n'); // DEBUG
   let reviews = [];
   try { reviews = JSON.parse(reviewsRaw); } catch (e) {
     // try jsonlines
     reviews = reviewsRaw.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
   }
+  fs.appendFileSync(outLog, `Parsed ${reviews.length} reviews...\n`); // DEBUG
   // Build interactions
   const interactions = [];
   for (const r of reviews) {
@@ -239,17 +251,42 @@ async function runInferInNode(outLog, errLog) {
     const rating = (r.overall || r.rating || 1.0);
     interactions.push({ user_id: String(r.user_id), asin: String(r.asin), rating: Number(rating) });
   }
+  fs.appendFileSync(outLog, `Built ${interactions.length} interactions from file...\n`); // DEBUG
+
   // include likes from users in DB
-  const User = require('../models/userModel');
-  const users = await User.find({}, { user_id: 1, likedProducts: 1 }).lean().exec();
-  for (const u of users) {
-    const uid = String(u.user_id);
-    for (const a of (u.likedProducts || [])) interactions.push({ user_id: uid, asin: String(a), rating: 4.0 });
+  // include likes from users in DB
+  const mongoose = require('mongoose');
+  if (mongoose.connection && mongoose.connection.readyState === 1) {
+      fs.appendFileSync(outLog, `Using existing Mongoose connection (state: ${mongoose.connection.readyState})...\n`);
+      console.log('[RetrainManager] Using existing DB connection for user likes...');
+      
+      try {
+          const db = mongoose.connection.db;
+          // Use a shorter timeout since we are already connected
+          const users = await Promise.race([
+             db.collection('users').find({}, { projection: { user_id: 1, likedProducts: 1 } }).toArray(),
+             new Promise((_, reject) => setTimeout(() => reject(new Error('MONGOOSE_QUERY_TIMEOUT')), 8000))
+          ]);
+          
+          fs.appendFileSync(outLog, `Found ${users.length} users in DB...\n`);
+          console.log(`[RetrainManager] Found ${users.length} users in DB.`);
+          for (const u of users) {
+              const uid = String(u.user_id);
+              for (const a of (u.likedProducts || [])) interactions.push({ user_id: uid, asin: String(a), rating: 4.0 });
+          }
+      } catch (dbErr) {
+          fs.appendFileSync(outLog, `DB Query failed: ${dbErr}\n`);
+          console.error(`[RetrainManager] DB Query failed: ${dbErr}`);
+      }
+  } else {
+      fs.appendFileSync(outLog, `Mongoose not connected (state: ${mongoose.connection ? mongoose.connection.readyState : 'null'}), skipping DB likes...\n`);
+      console.warn('[RetrainManager] Mongoose not connected, skipping DB likes.');
   }
   // compute popularity
   const counts = {};
   for (const it of interactions) counts[it.asin] = (counts[it.asin] || 0) + 1;
   const popular = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([asin, c]) => asin);
+  fs.appendFileSync(outLog, `computed popularity...\n`); // DEBUG
 
   // metadata
   let meta = {};
@@ -258,7 +295,12 @@ async function runInferInNode(outLog, errLog) {
       const md = JSON.parse(fs.readFileSync(META_FILE, 'utf8'));
       for (const r of md) {
         const key = String(r.parent_asin || r.asin);
-        meta[key] = { title: r.title, price: r.price, category: r.main_category, images: r.images || [] };
+        meta[key] = {
+          title: r.title,
+          price: r.price,
+          category: r.main_category,
+          images: r.imageURLHighRes || r.images || []
+        };
       }
     }
   } catch (e) { /* ignore */ }
