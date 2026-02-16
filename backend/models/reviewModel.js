@@ -19,4 +19,13 @@ const ReviewSchema = new mongoose.Schema({
     quality_score: { type: Number, default: 0 }
 }, { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } });
 ReviewSchema.virtual('productDetails', { ref: 'Product', localField: 'asin', foreignField: 'asin', justOne: true });
+
+// Performance Indexes
+ReviewSchema.index({ asin: 1 });
+ReviewSchema.index({ user_id: 1 });
+ReviewSchema.index({ battery_score: -1 });
+ReviewSchema.index({ camera_score: -1 });
+ReviewSchema.index({ price_score: -1 });
+ReviewSchema.index({ quality_score: -1 });
+
 module.exports = mongoose.model('Review', ReviewSchema);

@@ -14,22 +14,33 @@ const adminRoutes = require("./routes/adminRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+const cacheManager = require('./utils/cacheManager');
 
+// Initialize Cache
+cacheManager.initRedis();
+
+// Middleware
 // Middleware
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
   process.env.FRONTEND_URL,
   process.env.VERCEL_URL
-].filter(Boolean);
+].filter(Boolean).map(url => url.replace(/\/$/, "")); // Strip trailing slashes
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+    
+    const normalizedOrigin = origin.replace(/\/$/, "");
+    const isAllowed = allowedOrigins.includes(normalizedOrigin) || 
+                     normalizedOrigin.endsWith(".vercel.app") ||
+                     process.env.NODE_ENV !== 'production';
+
+    if (isAllowed) {
       callback(null, true);
     } else {
+      console.error(`CORS Blocked: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -86,6 +97,11 @@ if (process.env.RETRAIN_CRON) {
 // Model-run threshold (number of likes+reviews to auto-trigger an infer-only run)
 const MODEL_RUN_THRESHOLD = Number(process.env.MODEL_RUN_THRESHOLD || 10);
 console.log('MODEL_RUN_THRESHOLD =', MODEL_RUN_THRESHOLD);
+
+// Health Check / Welcome Route
+app.get("/", (req, res) => {
+  res.status(200).json({ status: "Online", message: "RecoSense API is running smoothly." });
+});
 
 // Serve frontend build (optional single-service deployment)
 if (process.env.SERVE_FRONTEND === "true") {

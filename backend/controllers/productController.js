@@ -1,34 +1,167 @@
 const Product = require('../models/productModel');
+const Review = require('../models/reviewModel');
 const fs = require('fs');
 const path = require('path');
+const cache = require('../utils/cacheManager');
+
+// Helper to inject XAI (top selling point) based on review sentiment
+const injectXAI = async (products) => {
+    if (!products || products.length === 0) return products;
+    
+    // Check cache for individual products first? (Optional, skipping for now to keep complexity low)
+    const asins = products.map((p) => p.asin);
+    const sentimentStats = await Review.aggregate([
+        { $match: { asin: { $in: asins } } },
+        {
+            $group: {
+                _id: "$asin",
+                battery: { $avg: "$battery_score" },
+                camera: { $avg: "$camera_score" },
+                screen: { $avg: "$screen_score" },
+                price: { $avg: "$price_score" },
+                software: { $avg: "$software_score" },
+                quality: { $avg: "$quality_score" }
+            }
+        }
+    ]);
+
+    const statsMap = sentimentStats.reduce((acc, stat) => {
+        const aspects = [
+            { name: 'Battery', score: stat.battery },
+            { name: 'Camera', score: stat.camera },
+            { name: 'Screen', score: stat.screen },
+            { name: 'Value', score: stat.price },
+            { name: 'Software', score: stat.software },
+            { name: 'Quality', score: stat.quality }
+        ];
+        // Lowered threshold to 0.2 to ensure visibility for more products
+        const best = aspects.filter(a => a.score > 0.2).sort((a,b) => b.score - a.score)[0];
+        acc[stat._id] = best ? best.name : null;
+        return acc;
+    }, {});
+
+    return products.map(p => ({
+        ...p,
+        topAspect: statsMap[p.asin] || p.topAspect || null
+    }));
+};
 
 exports.getProducts = async (req, res) => {
     try {
-        // Support query params:
-        // - random=true&size=NN  => return NN random products (uses aggregation $sample)
-        // - page=1&limit=20      => server-side pagination (skip/limit)
-        // - limit=NN             => limit results
-        // default: return all products
-        const { random, size, page, limit } = req.query;
+        const { random, size, page, limit, sortBy, search } = req.query;
+
+        // --- CACHE LAYER ---
+        // Don't cache random sampling as it should be fresh
+        const isCacheable = random !== 'true' && !search; 
+        const cacheKey = `products_${sortBy || 'default'}_p${page || 1}_l${limit || 20}`;
+        
+        if (isCacheable) {
+            const cached = await cache.get(cacheKey);
+            if (cached) return res.json(cached);
+        }
+
+        // 1. Handle Random Sampling
         if (random === 'true') {
             const sampleSize = Math.max(1, Math.min(500, parseInt(size || '20', 10)));
-            const products = await Product.aggregate([{ $sample: { size: sampleSize } }]);
+            const rawProducts = await Product.aggregate([{ $sample: { size: sampleSize } }]);
+            const products = await injectXAI(rawProducts);
             return res.json(products);
         }
-        if (page && limit) {
-            const p = Math.max(1, parseInt(page, 10));
-            const l = Math.max(1, Math.min(500, parseInt(limit, 10)));
-            const products = await Product.find({}).skip((p - 1) * l).limit(l);
-            return res.json(products);
+
+        // 2. Handle Search Query
+        let query = {};
+        if (search) {
+            query = {
+                $or: [
+                    { title: { $regex: search, $options: 'i' } },
+                    { brand: { $regex: search, $options: 'i' } }
+                ]
+            };
         }
-        if (limit) {
-            const l = Math.max(1, Math.min(500, parseInt(limit, 10)));
-            const products = await Product.find({}).limit(l);
-            return res.json(products);
+
+        // 3. Handle Sentiment-Based Sorting
+        let finalProducts = [];
+        const validAspects = ['battery', 'camera', 'screen', 'price', 'software', 'quality'];
+        if (sortBy && validAspects.includes(sortBy.toLowerCase())) {
+            const aspectField = `${sortBy.toLowerCase()}_score`;
+            
+            const pipeline = [
+                { $match: { [aspectField]: { $ne: 0 } } },
+                {
+                    $group: {
+                        _id: "$asin",
+                        avgSentiment: { $avg: `$${aspectField}` },
+                        reviewCount: { $sum: 1 }
+                    }
+                },
+                { $sort: { avgSentiment: -1 } },
+                {
+                    $lookup: {
+                        from: "products",
+                        localField: "_id",
+                        foreignField: "asin",
+                        as: "productDetails"
+                    }
+                },
+                { $unwind: "$productDetails" },
+                {
+                    $project: {
+                        _id: "$productDetails._id",
+                        asin: "$_id",
+                        title: "$productDetails.title",
+                        brand: "$productDetails.brand",
+                        price: "$productDetails.price",
+                        imageURLHighRes: "$productDetails.imageURLHighRes",
+                        categories: "$productDetails.categories",
+                        avgSentiment: 1,
+                        reviewCount: 1
+                    }
+                }
+            ];
+
+            if (search) {
+                pipeline.push({
+                    $match: {
+                        $or: [
+                            { title: { $regex: search, $options: 'i' } },
+                            { brand: { $regex: search, $options: 'i' } }
+                        ]
+                    }
+                });
+            }
+
+            const l = Math.max(1, Math.min(50, parseInt(limit || '20', 10)));
+            pipeline.push({ $limit: l });
+
+            const sortedProducts = await Review.aggregate(pipeline);
+            finalProducts = sortedProducts.map(p => ({
+                ...p,
+                topAspect: sortBy.charAt(0).toUpperCase() + sortBy.slice(1)
+            }));
+        } else {
+            // 4. Default Pagination / Listing
+            const p = Math.max(1, parseInt(page || '1', 10));
+            const l = Math.max(1, Math.min(500, parseInt(limit || '20', 10)));
+            
+            const rawProducts = await Product.find(query)
+                .skip((p - 1) * l)
+                .limit(l)
+                .sort({ createdAt: -1 })
+                .lean();
+
+            finalProducts = await injectXAI(rawProducts);
         }
-        const products = await Product.find({});
-        res.json(products);
-    } catch (error) { res.status(500).json({ message: 'Server Error' }); }
+
+        // Save to cache before sending
+        if (isCacheable) {
+            await cache.set(cacheKey, finalProducts, 300); // 5 min
+        }
+
+        res.json(finalProducts);
+    } catch (error) { 
+        console.error('getProducts Error:', error);
+        res.status(500).json({ message: 'Server Error' }); 
+    }
 };
 
 // Try DB first, then fall back to metadata file when product not found in DB
@@ -36,7 +169,10 @@ exports.getProductByAsin = async (req, res) => {
     try {
         const asin = req.params.asin;
         const product = await Product.findOne({ asin }).lean().exec();
-        if (product) return res.json(product);
+        if (product) {
+            const enriched = await injectXAI([product]);
+            return res.json(enriched[0]);
+        }
 
         // DB miss: attempt to load metadata.jsonl and find matching record
         const metadataPath = path.join(__dirname, '..', 'data', 'metadata.jsonl');
@@ -98,7 +234,8 @@ exports.getProductByAsin = async (req, res) => {
                 : (Array.isArray(found.imageURLHighRes) ? found.imageURLHighRes : []),
             categories: found.main_category ? [[found.main_category]] : [],
         };
-        return res.json(mapped);
+        const enriched = await injectXAI([mapped]);
+        return res.json(enriched[0]);
     } catch (error) {
         console.error('Error in getProductByAsin:', error);
         res.status(500).json({ message: 'Server Error' });

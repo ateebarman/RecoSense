@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useUser } from '../context/UserContext';
 import { getProducts, getUser, toggleLike } from '../services/api';
 import ProductCard from '../components/ProductCard';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw, LayoutGrid, Sparkles, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { RefreshCw, LayoutGrid, Sparkles, Filter, ChevronLeft, ChevronRight, Search, BarChart3 } from 'lucide-react';
 
 const Home = () => {
     const [products, setProducts] = useState([]);
@@ -11,13 +11,38 @@ const Home = () => {
     const [loading, setLoading] = useState(true);
     const pageSize = 12;
     const [likedProducts, setLikedProducts] = useState(new Set());
+    const [sortBy, setSortBy] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const { user_id, userName } = useUser();
 
-    const fetchData = async (opts = { random: true, size: 60 }) => {
+    // Debounce search input
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchQuery);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    const fetchData = useCallback(async (opts = {}) => {
         setLoading(true);
         try {
-            const productsRes = await getProducts(opts);
+            // Priority: sortBy/search > manual opts > default random
+            const params = {
+                ...opts,
+                ...(sortBy && { sortBy }),
+                ...(debouncedSearch && { search: debouncedSearch })
+            };
+
+            // If no filters/sorts, and no explicit opts, default to random for variety
+            if (!sortBy && !debouncedSearch && Object.keys(opts).length === 0) {
+                params.random = true;
+                params.size = 60;
+            }
+
+            const productsRes = await getProducts(params);
             setProducts(productsRes.data || []);
+
             if (user_id) {
                 const userRes = await getUser(user_id);
                 setLikedProducts(new Set(userRes.data.likedProducts || []));
@@ -27,11 +52,11 @@ const Home = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [user_id, sortBy, debouncedSearch]);
 
     useEffect(() => {
         fetchData();
-    }, [user_id]);
+    }, [fetchData]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -74,19 +99,47 @@ const Home = () => {
                     <p>Discover the latest smartphones curated just for you.</p>
                 </motion.div>
 
-                <div className="header-actions">
-                    <button
-                        className="btn-secondary"
-                        onClick={() => fetchData({ random: true, size: 60 })}
-                        disabled={loading}
-                    >
-                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-                        Refresh
-                    </button>
-                    <button className="btn-primary" onClick={() => fetchData({})}>
-                        <LayoutGrid size={18} />
-                        View All
-                    </button>
+                <div className="header-controls">
+                    <div className="search-bar-wrapper">
+                        <Search className="search-icon" size={18} />
+                        <input
+                            type="text"
+                            placeholder="Search by title or brand..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="search-input"
+                        />
+                    </div>
+
+                    <div className="filter-group">
+                        <div className="sort-wrapper">
+                            <BarChart3 className="sort-icon" size={18} />
+                            <select
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value)}
+                                className="styled-select"
+                            >
+                                <option value="">Sort by: Latest</option>
+                                <option value="battery">Best Battery Sentiment</option>
+                                <option value="camera">Best Camera Sentiment</option>
+                                <option value="screen">Best Screen Sentiment</option>
+                                <option value="price">Best Value for Money</option>
+                                <option value="quality">Build Quality focus</option>
+                            </select>
+                        </div>
+
+                        <button
+                            className="btn-secondary btn-icon-only"
+                            onClick={() => {
+                                setSortBy('');
+                                setSearchQuery('');
+                                fetchData({ random: true, size: 60 });
+                            }}
+                            title="Refresh Catalog"
+                        >
+                            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -123,8 +176,11 @@ const Home = () => {
                             </motion.div>
                         )) : (
                             <div className="empty-state">
-                                <h3>No products found</h3>
-                                <p>Try refreshing the list or checking back later.</p>
+                                <h3>No matching products</h3>
+                                <p>Try adjusting your sentiment filters or search query.</p>
+                                <button className="btn-primary" style={{ marginTop: '1rem' }} onClick={() => { setSortBy(''); setSearchQuery(''); }}>
+                                    Reset Filters
+                                </button>
                             </div>
                         )}
                     </motion.div>

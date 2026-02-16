@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
-import { ShoppingCart, Heart } from 'lucide-react';
+import { ShoppingCart, Heart, Zap, Camera, Smartphone, DollarSign, Cpu, ShieldCheck } from 'lucide-react';
 
 const ProductCard = ({ product, isLiked, onLike }) => {
     const { addItemToCart } = useCart();
@@ -23,10 +23,27 @@ const ProductCard = ({ product, isLiked, onLike }) => {
         }
     };
 
+    const getAspectIcon = (aspect) => {
+        switch (aspect?.toLowerCase()) {
+            case 'battery': return <Zap size={12} />;
+            case 'camera': return <Camera size={12} />;
+            case 'screen': return <Smartphone size={12} />;
+            case 'value': return <DollarSign size={12} />;
+            case 'software': return <Cpu size={12} />;
+            default: return <ShieldCheck size={12} />;
+        }
+    };
+
     return (
         <Link to={`/product/${encodeURIComponent(product.asin)}`} className="product-card-wrapper">
             <div className="product-card">
                 <div className="product-image-container">
+                    {product.topAspect && (
+                        <div className="xai-badge">
+                            {getAspectIcon(product.topAspect)}
+                            <span>{product.topAspect} Peak</span>
+                        </div>
+                    )}
                     <img src={imageUrl} alt={product.title} loading="lazy" />
                 </div>
                 <div className="product-details">

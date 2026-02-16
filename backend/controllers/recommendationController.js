@@ -195,13 +195,23 @@ function recommendProductsJS({ userId, reviewsFile, metadataFile, topN = 30, rev
 // GET /api/recommendations
 async function getRecommendations(req, res) {
   try {
+    const cache = require('../utils/cacheManager');
     const topN = Number(req.query.top_n) || 30;
     const requestedUserId = req.query.user_id;
+    
+    // Fallback logic for user ID
+    let userId = requestedUserId || DEMO_USER_IDS[Math.floor(Math.random() * DEMO_USER_IDS.length)];
+
+    // --- CACHE LAYER ---
+    const cacheKey = `recs_${userId}_${topN}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
     const reviewsFile = path.join(__dirname, "..", "data", "absa_reviews.json");
     const metadataFile = path.join(__dirname, "..", "data", "metadata.jsonl");
 
     // If user_id provided, use it; otherwise use a demo user id
-    let userId = requestedUserId || DEMO_USER_IDS[Math.floor(Math.random() * DEMO_USER_IDS.length)];
+    // userId is already declared above
 
     // Attempt to load user demographics from DB to handle cold-start
     const User = require('../models/userModel');
@@ -240,11 +250,13 @@ async function getRecommendations(req, res) {
             enriched.push(m ? { ...rec, ...m } : rec);
           }
 
-          return res.json({
+          const response = {
             userId,
             recommendations: enriched,
             model_used: 'Hybrid Neural Engine (Precomputed)'
-          });
+          };
+          await cache.set(cacheKey, response, 600);
+          return res.json(response);
         }
       } catch (e) {
         console.error('Error fetching precomputed recs:', e);
@@ -253,17 +265,21 @@ async function getRecommendations(req, res) {
       // Fallback to aspect-based if DB recs not available yet
       const mergedReviews = reviewsData.concat(dbReviews);
       const rec = recommendProductsJS({ userId, topN, reviewsData: mergedReviews, metadataData });
-      return res.json({
+      const response = {
         ...rec,
         model_used: 'Hybrid Neural Engine (Live Analytics)'
-      });
+      };
+      await cache.set(cacheKey, response, 600);
+      return res.json(response);
     }
 
     // If there are user reviews (from file or DB), run normal aspect-based recommendation
     if (userReviews.length > 0) {
       const mergedReviews = reviewsData.concat(dbReviews);
       const localRecommend = recommendProductsJS({ userId, topN, reviewsData: mergedReviews, metadataData });
-      return res.json({ ...localRecommend, model_used: 'Hybrid Neural Engine (Live Analytics)' });
+      const response = { ...localRecommend, model_used: 'Hybrid Neural Engine (Live Analytics)' };
+      await cache.set(cacheKey, response, 600);
+      return res.json(response);
     }
 
     // Cold-start: no reviews for this user; try demographic/location based popularity
@@ -361,7 +377,9 @@ async function getRecommendations(req, res) {
         }
 
         // Return only items with metadata/title (avoid ASIN-only blanks)
-        return res.json({ userId, recommendations: candidates, message: 'Cold-start: demographic popularity' });
+        const response = { userId, recommendations: candidates, message: 'Cold-start: demographic popularity' };
+        await cache.set(cacheKey, response, 600);
+        return res.json(response);
       }
     }
 
@@ -369,7 +387,9 @@ async function getRecommendations(req, res) {
     if (user && !(user.age_group || user.gender || user.location)) {
       const demoUser = DEMO_USER_IDS[Math.floor(Math.random() * DEMO_USER_IDS.length)];
       const demoRecommend = recommendProductsJS({ userId: demoUser, reviewsFile, metadataFile, topN });
-      return res.json({ userId, recommendations: demoRecommend.recommendations, message: 'Fallback: demo user model' });
+      const response = { userId, recommendations: demoRecommend.recommendations, message: 'Fallback: demo user model' };
+      await cache.set(cacheKey, response, 600);
+      return res.json(response);
     }
 
     // Fallback: global popularity computed from file reviews (only include items with metadata and images)
@@ -391,7 +411,9 @@ async function getRecommendations(req, res) {
       avg_rating: it.meta.average_rating || 0,
       category: it.meta.main_category || ''
     }));
-    return res.json({ userId, recommendations: globalCandidates, message: 'Cold-start: global popularity' });
+    const response = { userId, recommendations: globalCandidates, message: 'Cold-start: global popularity' };
+    await cache.set(cacheKey, response, 600);
+    return res.json(response);
   } catch (err) {
     console.error('Recommendation error:', err);
     return res.status(500).json({ error: 'Failed to generate recommendations' });
