@@ -2,56 +2,95 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const STATUS_FILE = path.join(__dirname, 'retrain_status.json');
-const LOG_DIR = path.join(__dirname, 'logs');
-const RECS_FILE = path.join(__dirname, '..', 'data', 'lightfm_recs.json');
-const COUNTER_FILE = path.join(__dirname, 'retrain_counters.json');
+const Recommendation = require('../models/recommendationModel');
+const SystemConfig = require('../models/systemConfigModel');
 
+const LOG_DIR = path.join(__dirname, 'logs');
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
 
-function readStatus() {
+async function readStatus() {
   try {
-    if (fs.existsSync(STATUS_FILE)) return JSON.parse(fs.readFileSync(STATUS_FILE, 'utf8'));
+    const config = await SystemConfig.findOne({ config_id: 'global_config' });
+    if (config) {
+      return {
+        status: config.engine_status,
+        mode: config.engine_mode,
+        pid: config.last_pid,
+        started_at: config.last_run_at,
+        finished_at: config.last_finished_at,
+        msg: config.last_msg,
+        outLog: config.outLog,
+        errLog: config.errLog
+      };
+    }
   } catch (e) {
-    console.error('Failed to read retrain status:', e);
+    console.error('Failed to read status from DB:', e);
   }
   return { status: 'idle' };
 }
 
-function writeStatus(s) {
+async function writeStatus(s) {
   try {
-    fs.writeFileSync(STATUS_FILE, JSON.stringify(s, null, 2));
+    await SystemConfig.findOneAndUpdate(
+      { config_id: 'global_config' },
+      {
+        engine_status: s.status,
+        engine_mode: s.mode || 'train',
+        last_pid: s.pid,
+        last_run_at: s.started_at,
+        last_finished_at: s.finished_at,
+        last_msg: s.msg,
+        outLog: s.outLog,
+        errLog: s.errLog
+      },
+      { upsert: true, new: true }
+    );
   } catch (e) {
-    console.error('Failed to write retrain status:', e);
+    console.error('Failed to write status to DB:', e);
   }
 }
 
-function readCounters() {
+async function readCounters() {
   try {
-    if (fs.existsSync(COUNTER_FILE)) return JSON.parse(fs.readFileSync(COUNTER_FILE, 'utf8'));
+    const config = await SystemConfig.findOne({ config_id: 'global_config' });
+    if (config) {
+      return {
+        pending: config.pending_interactions || 0,
+        likes: config.likes_count || 0,
+        reviews: config.reviews_count || 0
+      };
+    }
   } catch (e) {
-    console.error('Failed to read counters:', e);
+    console.error('Failed to read counters from DB:', e);
   }
   return { pending: 0, likes: 0, reviews: 0 };
 }
 
-function writeCounters(c) {
+async function writeCounters(c) {
   try {
-    fs.writeFileSync(COUNTER_FILE, JSON.stringify(c, null, 2));
+    await SystemConfig.findOneAndUpdate(
+      { config_id: 'global_config' },
+      {
+        pending_interactions: c.pending,
+        likes_count: c.likes,
+        reviews_count: c.reviews
+      },
+      { upsert: true, new: true }
+    );
   } catch (e) {
-    console.error('Failed to write counters:', e);
+    console.error('Failed to write counters to DB:', e);
   }
 }
 
 async function startRetrain() {
-  const cur = readStatus();
+  const cur = await readStatus();
   if (cur.status === 'running') return { started: false, reason: 'already_running', status: cur };
 
   const ts = new Date().toISOString().replace(/[:.]/g, '-');
   const outLog = path.join(LOG_DIR, `retrain-${ts}.out.log`);
   const errLog = path.join(LOG_DIR, `retrain-${ts}.err.log`);
 
-  writeStatus({ status: 'running', pid: null, started_at: new Date().toISOString(), outLog, errLog });
+  await writeStatus({ status: 'running', pid: null, started_at: new Date(), outLog, errLog, mode: 'train' });
 
   // Prefer configured PYTHON_EXECUTABLE, else try local .venv, else fall back to 'python'
   let pythonExec = process.env.PYTHON_EXECUTABLE || null;
@@ -89,32 +128,85 @@ async function startRetrain() {
   if (py.stderr) py.stderr.pipe(errStream);
 
   // update status immediately and return (fire-and-forget)
-  writeStatus({ status: 'running', pid: py.pid, started_at: new Date().toISOString(), outLog, errLog });
+  writeStatus({ 
+    status: 'running', 
+    pid: py.pid, 
+    started_at: new Date(), 
+    outLog, 
+    errLog,
+    mode: 'train'
+  });
   console.log(`[RetrainManager] Started Python retrain process (PID: ${py.pid})`);
   console.log(`[RetrainManager] Logs writing to: ${outLog}`);
 
   py.stdout.on('data', (data) => console.log(`[Retrain-Py-Out]: ${data.toString().trim()}`));
   py.stderr.on('data', (data) => console.error(`[Retrain-Py-Err]: ${data.toString().trim()}`));
 
-  py.on('exit', (code) => {
+  py.on('exit', async (code) => {
     console.log(`[RetrainManager] Python process exited with code ${code}`);
-    const finished_at = new Date().toISOString();
+    const finished_at = new Date();
     const status = code === 0 ? 'success' : 'failed';
     const msg = `exit:${code}`;
-    writeStatus({ status, pid: null, started_at: readStatus().started_at || null, finished_at, msg, outLog, errLog });
+    const curStatus = await readStatus();
+    await writeStatus({ 
+      status, 
+      pid: null, 
+      started_at: curStatus.started_at, 
+      finished_at, 
+      msg, 
+      outLog, 
+      errLog,
+      mode: 'train'
+    });
+    
+    // If success, sync file to DB
+    if (code === 0) {
+        syncFileToDb(outLog);
+    }
   });
-  py.on('error', (err) => {
+  py.on('error', async (err) => {
     console.error(`[RetrainManager] Python process error:`, err);
-    const finished_at = new Date().toISOString();
-    writeStatus({ status: 'failed', pid: null, started_at: readStatus().started_at || null, finished_at, msg: String(err), outLog, errLog });
+    const finished_at = new Date();
+    const curStatus = await readStatus();
+    await writeStatus({ 
+      status: 'failed', 
+      pid: null, 
+      started_at: curStatus.started_at, 
+      finished_at, 
+      msg: String(err), 
+      outLog, 
+      errLog,
+      mode: 'train'
+    });
   });
 
   return { started: true, pid: py.pid };
 }
 
+async function syncFileToDb(outLog) {
+    try {
+        const RECS_FILE = path.join(__dirname, '..', 'data', 'lightfm_recs.json');
+        if (!fs.existsSync(RECS_FILE)) return;
+        const data = JSON.parse(fs.readFileSync(RECS_FILE, 'utf8'));
+        const userIds = Object.keys(data);
+        console.log(`[RetrainManager] Syncing ${userIds.length} users from file to DB...`);
+        
+        for (const uid of userIds) {
+            await Recommendation.findOneAndUpdate(
+                { user_id: uid },
+                { recommendations: data[uid] },
+                { upsert: true }
+            );
+        }
+        if (outLog) fs.appendFileSync(outLog, `Synced ${userIds.length} users to DB\n`);
+    } catch (e) {
+        console.error('Failed to sync recs file to DB:', e);
+    }
+}
+
 async function startModelRun() {
   // lightweight run that avoids training heavy models - runs inference/generation only
-  const cur = readStatus();
+  const cur = await readStatus();
   if (cur.status === 'running') return { started: false, reason: 'already_running', status: cur };
 
   const ts = new Date().toISOString().replace(/[:.]/g, '-');
@@ -123,12 +215,13 @@ async function startModelRun() {
 
   // Prefer a fast Node.js-based infer-only recompute (no heavy Python dependency)
   try {
-    writeStatus({ status: 'running', pid: null, started_at: new Date().toISOString(), outLog, errLog, mode: 'infer' });
+    await writeStatus({ status: 'running', pid: null, started_at: new Date(), outLog, errLog, mode: 'infer' });
     console.log('[RetrainManager] Starting Quick Re-run (Node.js mode)...');
     await runInferInNode(outLog, errLog);
     console.log('[RetrainManager] Quick Re-run completed successfully.');
-    writeStatus({ status: 'success', pid: null, started_at: readStatus().started_at || null, finished_at: new Date().toISOString(), msg: 'ok', outLog, errLog, mode: 'infer' });
-    writeCounters({ pending: 0, likes: 0, reviews: 0 });
+    const curStatus = await readStatus();
+    await writeStatus({ status: 'success', pid: null, started_at: curStatus.started_at, finished_at: new Date(), msg: 'ok', outLog, errLog, mode: 'infer' });
+    await writeCounters({ pending: 0, likes: 0, reviews: 0 });
     return { started: true };
   } catch (err) {
     const finished_at = new Date().toISOString();
@@ -174,12 +267,12 @@ async function startModelRun() {
   }
 }
 
-function incrementCounter(type, amount = 1, threshold = null) {
-  const c = readCounters();
+async function incrementCounter(type, amount = 1, threshold = null) {
+  const c = await readCounters();
   c.pending = (c.pending || 0) + amount;
   if (type === 'like') c.likes = (c.likes || 0) + amount;
   if (type === 'review') c.reviews = (c.reviews || 0) + amount;
-  writeCounters(c);
+  await writeCounters(c);
   const th = threshold || Number(process.env.MODEL_RUN_THRESHOLD || 10);
   if ((c.pending || 0) >= th) {
     // trigger a model run (non-training) and reset counters on success
@@ -307,8 +400,9 @@ async function runInferInNode(outLog, errLog) {
 
   // per-user recs
   const userIds = Array.from(new Set(interactions.map(i => i.user_id)));
-  const recs = {};
   const N = 20;
+  fs.appendFileSync(outLog, `Saving recs for ${userIds.length} users to DB...\n`);
+  
   for (const u of userIds) {
     const seen = new Set(interactions.filter(i => i.user_id === u).map(i => i.asin));
     const out = [];
@@ -321,11 +415,19 @@ async function runInferInNode(outLog, errLog) {
       rank += 1;
       if (rank > N) break;
     }
-    recs[u] = out;
+    
+    // Save to DB
+    await Recommendation.findOneAndUpdate(
+        { user_id: u },
+        { recommendations: out },
+        { upsert: true }
+    );
   }
-  fs.writeFileSync(RECS_FILE, JSON.stringify(recs, null, 2), 'utf8');
-  // write some diagnostic output
-  try { fs.appendFileSync(outLog, `Node infer completed: Wrote ${Object.keys(recs).length} users\n`); } catch (e) {}
+  
+  // also write file for backward compatibility/debugging
+  // fs.writeFileSync(RECS_FILE, JSON.stringify(recs, null, 2), 'utf8');
+  
+  try { fs.appendFileSync(outLog, `Node infer completed: Synced ${userIds.length} users to DB\n`); } catch (e) {}
 }
 
 module.exports = { startRetrain, startModelRun, getStatus, cleanRecs, incrementCounter, getCounters, resetCounters };

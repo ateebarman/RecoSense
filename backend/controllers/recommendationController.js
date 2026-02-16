@@ -224,41 +224,37 @@ async function getRecommendations(req, res) {
     const LIGHTFM_THRESHOLD = Number(process.env.LIGHTFM_THRESHOLD || 5); // tune via env
 
     if (interactionsCount >= LIGHTFM_THRESHOLD) {
-      // Try to load precomputed LightFM recommendations from disk
+      // Try to load precomputed recommendations from MongoDB
       try {
-        const lmPath = path.join(__dirname, '..', 'data', 'lightfm_recs.json');
-        if (fs.existsSync(lmPath)) {
-          const raw = fs.readFileSync(lmPath, 'utf-8');
-          const lm = JSON.parse(raw);
-          if (lm[userId] && lm[userId].length > 0) {
-            // Enrich LightFM recommendations with DB metadata (especially images)
-            const enriched = [];
-            const Product = require('../models/productModel');
-            for (const rec of lm[userId]) {
-              const dbProd = await Product.findOne({ asin: rec.asin }).lean().exec().catch(() => null);
-              if (dbProd) {
-                enriched.push({
-                  ...rec,
-                  title: dbProd.title || rec.title,
-                  price: dbProd.price || rec.price,
-                  images: (Array.isArray(dbProd.imageURLHighRes) && dbProd.imageURLHighRes.length > 0) 
-                    ? dbProd.imageURLHighRes 
-                    : rec.images,
-                  category: dbProd.brand || rec.category || ''
-                });
-              } else if (rec.title) {
-                // Keep if it already has a title from the file
-                enriched.push(rec);
-              }
-              // If no DB record and no title in file, we skip it (remove broken products)
+        const Recommendation = require('../models/recommendationModel');
+        const dbRecs = await Recommendation.findOne({ user_id: userId }).lean().exec();
+        
+        if (dbRecs && Array.isArray(dbRecs.recommendations) && dbRecs.recommendations.length > 0) {
+          const enriched = [];
+          const Product = require('../models/productModel');
+          
+          for (const rec of dbRecs.recommendations) {
+            const dbProd = await Product.findOne({ asin: rec.asin }).lean().exec().catch(() => null);
+            if (dbProd) {
+              enriched.push({
+                ...rec,
+                title: dbProd.title || rec.title,
+                price: dbProd.price || rec.price,
+                images: (Array.isArray(dbProd.imageURLHighRes) && dbProd.imageURLHighRes.length > 0) 
+                  ? dbProd.imageURLHighRes 
+                  : rec.images,
+                category: dbProd.brand || rec.category || ''
+              });
+            } else if (rec.title) {
+              enriched.push(rec);
             }
-            return res.json({ userId, recommendations: enriched, model_used: 'lightfm' });
           }
+          return res.json({ userId, recommendations: enriched, model_used: 'db_precomputed' });
         }
       } catch (e) {
-        console.error('Error loading lightfm recs:', e);
+        console.error('Error loading recommendations from DB:', e);
       }
-      // fallback to aspect-based if LightFM not available for this user
+      // fallback to aspect-based if DB recs not available yet
       const mergedReviews = reviewsData.concat(dbReviews);
       const rec = recommendProductsJS({ userId, topN, reviewsData: mergedReviews, metadataData });
       return res.json({ ...rec, model_used: 'aspect_based (fallback)' });

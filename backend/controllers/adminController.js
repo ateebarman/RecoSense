@@ -22,7 +22,7 @@ exports.getStats = async (req, res) => {
         const orderCount = orders.length;
 
         // Get live interaction counters
-        const counters = retrainManager.getCounters();
+        const counters = await retrainManager.getCounters();
 
         const modelStats = {
             threshold: Number(process.env.MODEL_RUN_THRESHOLD || 10),

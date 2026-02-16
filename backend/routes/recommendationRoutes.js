@@ -58,7 +58,7 @@ router.post('/model/run', requireAdmin, async (req, res) => {
 
 router.get('/model/counters', requireAdmin, async (req, res) => {
   try {
-    const c = retrainManager.getCounters();
+    const c = await retrainManager.getCounters();
     return res.json(c);
   } catch (e) {
     console.error('Counter status error:', e);
@@ -68,7 +68,7 @@ router.get('/model/counters', requireAdmin, async (req, res) => {
 
 router.post('/model/counters/reset', requireAdmin, async (req, res) => {
   try {
-    const c = retrainManager.resetCounters();
+    const c = await retrainManager.resetCounters();
     return res.json(c);
   } catch (e) {
     console.error('Counter reset error:', e);
